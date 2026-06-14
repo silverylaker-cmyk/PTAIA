@@ -40,6 +40,18 @@ body{
 .dz-btn:hover{filter:brightness(1.08)}
 .drop-error{color:var(--red);font-weight:600}
 
+/* ---------- 로딩 ---------- */
+.loading{
+  position:fixed;inset:0;background:rgba(238,241,246,.92);z-index:50;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+}
+.loading p{font-size:18px;color:var(--muted)}
+.spinner{
+  width:54px;height:54px;border:6px solid #cdd5e2;border-top-color:var(--blue);
+  border-radius:50%;animation:spin 1s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
 /* ---------- 결과 화면 ---------- */
 .result-screen{max-width:1180px;margin:0 auto;padding:18px 20px 60px}
 .topbar{
@@ -47,16 +59,16 @@ body{
   background:#fff;border:1px solid var(--line);border-radius:14px;
   padding:14px 18px;margin-bottom:18px;
 }
-.topbar-title{font-size:22px;font-weight:800}
+.topbar-title{font-size:22px;font-weight:800;white-space:nowrap}
 .topbar-meta{color:var(--muted);font-size:14px;flex:1;overflow:hidden}
-.topbar-meta img{max-height:34px;vertical-align:middle}
+.topbar-meta canvas{max-height:40px;width:auto;vertical-align:middle}
 .reset-btn{
   border:1px solid var(--line);background:#f4f6fa;border-radius:10px;
-  padding:9px 16px;font-size:14px;cursor:pointer;
+  padding:9px 16px;font-size:14px;cursor:pointer;white-space:nowrap;
 }
 .reset-btn:hover{background:#e9edf4}
 
-.section-title{font-size:20px;margin:24px 4px 12px}
+.section-title{font-size:20px;margin:26px 4px 12px}
 .section-title span{font-size:15px;color:var(--muted);font-weight:500}
 
 /* 순음청력 2분할 */
@@ -64,38 +76,36 @@ body{
 @media(max-width:820px){.audio-grid{grid-template-columns:1fr}}
 .panel{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .panel-banner{
-  display:flex;align-items:center;gap:14px;color:#fff;padding:14px 18px;
+  display:flex;align-items:center;gap:14px;color:#fff;padding:12px 18px;
 }
 .banner-right{background:var(--red)}
 .banner-left{background:var(--blue)}
-.ear-label{font-size:40px;font-weight:900;line-height:1}
+.ear-label{font-size:42px;font-weight:900;line-height:1}
 .ear-en{font-size:16px;font-weight:700;opacity:.85;letter-spacing:1px}
-.pta-box{margin-left:auto;text-align:right;display:flex;flex-direction:column;line-height:1.05}
-.pta-cap{font-size:14px;opacity:.9}
-.pta-val{font-size:30px;font-weight:900;display:flex;align-items:center;justify-content:flex-end}
-.pta-val canvas{height:40px;width:auto;vertical-align:middle;background:#fff;border-radius:6px;padding:2px 6px}
+.pta-box{margin-left:auto;display:flex;align-items:center;gap:12px}
+/* 신호등 (색만, 주석 없음) */
+.signal{
+  width:30px;height:30px;border-radius:50%;flex:0 0 auto;
+  box-shadow:0 0 0 4px rgba(255,255,255,.35), 0 2px 5px rgba(0,0,0,.3);
+  background:#bbb;
+}
+.pta-val{font-size:52px;font-weight:900;line-height:1;display:flex;align-items:center}
+.pta-val canvas{height:46px;width:auto;background:#fff;border-radius:6px;padding:2px 8px}
 
 .chart-wrap{position:relative;padding:10px}
 .chart-wrap canvas{width:100%;height:auto;display:block}
 .normal-badge{
-  position:absolute;left:58%;top:9%;
+  position:absolute;left:56%;top:12%;
   background:var(--green);color:#fff;font-size:14px;font-weight:700;
   padding:6px 12px;border-radius:9px;box-shadow:0 2px 6px rgba(0,0,0,.18);
   white-space:nowrap;
-}
-.severity-tag{
-  position:absolute;right:14px;bottom:14px;
-  background:#fff;border:2px solid var(--ink);border-radius:10px;
-  padding:6px 12px;font-weight:800;font-size:15px;
 }
 
 /* 임피던스 3분할 */
 .tymp-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
 @media(max-width:820px){.tymp-grid{grid-template-columns:1fr}}
 .tymp-panel{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}
-.tymp-head{
-  color:#fff;font-size:22px;font-weight:900;text-align:center;padding:10px;
-}
+.tymp-head{color:#fff;font-size:22px;font-weight:900;text-align:center;padding:10px}
 .tymp-head span{font-size:13px;font-weight:700;opacity:.85}
 .head-right{background:var(--red)}
 .head-left{background:var(--blue)}
@@ -103,15 +113,32 @@ body{
 .tymp-wrap{padding:8px}
 .tymp-wrap canvas{width:100%;height:auto;display:block}
 
-/* 설명 */
-.explain{
-  margin-top:26px;background:#fff;border:1px solid var(--line);
-  border-radius:14px;padding:18px 22px;
+/* 캡쳐 카드 (언어청력 / 이명표) */
+.capture-card{
+  background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;
 }
-.explain h3{margin:0 0 10px}
-.explain ul{margin:0;padding-left:20px;line-height:1.7}
-.pta-input{margin-top:14px;border-top:1px dashed var(--line);padding-top:12px}
-.pta-input summary{cursor:pointer;font-weight:700;color:var(--blue)}
-.pta-input-row{display:flex;gap:20px;flex-wrap:wrap;margin:12px 0 4px}
-.pta-input-row input{width:90px;font-size:16px;padding:6px 8px;border:1px solid var(--line);border-radius:8px}
-.pta-input-note{color:var(--muted);font-size:13px;margin:6px 0 0}
+.capture-card canvas{width:100%;height:auto;display:block;border-radius:6px}
+
+/* 이명검사 */
+.tinnitus-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+@media(max-width:820px){.tinnitus-grid{grid-template-columns:1fr}}
+.tin-note{
+  grid-column:1/-1;background:#fff8e6;border:1px solid #f0d98a;border-radius:12px;
+  padding:14px 18px;font-size:15px;line-height:1.6;
+}
+.tin-marker{
+  position:absolute;transform:translate(-50%,-50%);z-index:3;
+  width:26px;height:26px;border-radius:50%;
+  border:4px solid #7b2ff2;background:rgba(123,47,242,.25);
+  box-shadow:0 0 0 4px rgba(123,47,242,.18);
+  animation:pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(123,47,242,.22)}50%{box-shadow:0 0 0 10px rgba(123,47,242,.05)}}
+.tin-callout{
+  position:absolute;transform:translateX(-50%);z-index:3;
+  background:#7b2ff2;color:#fff;font-size:13px;font-weight:700;
+  padding:5px 9px;border-radius:8px;white-space:nowrap;
+  box-shadow:0 2px 6px rgba(0,0,0,.25);
+}
+.tin-head{color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px}
+.tin-head .ear-label{font-size:34px}

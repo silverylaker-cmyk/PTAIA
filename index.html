@@ -20,6 +20,12 @@
     <p id="dropError" class="drop-error" hidden></p>
   </section>
 
+  <!-- 처리 중 표시 -->
+  <div id="loading" class="loading" hidden>
+    <div class="spinner"></div>
+    <p id="loadingText">결과지를 분석하고 있어요…</p>
+  </div>
+
   <!-- 2단계: 결과 화면 -->
   <section id="resultScreen" class="result-screen" hidden>
     <header class="topbar">
@@ -36,13 +42,12 @@
           <span class="ear-label">오른쪽</span>
           <span class="ear-en">RIGHT</span>
           <span class="pta-box">
-            <span class="pta-cap">4분법 평균</span>
+            <span class="signal" id="sigRight"></span>
             <span class="pta-val" id="ptaRight"></span>
           </span>
         </div>
         <div class="chart-wrap" id="chartRight">
           <span class="normal-badge">정상 영역 (25dB 이하)</span>
-          <span class="severity-tag" id="sevRight" hidden></span>
         </div>
       </article>
 
@@ -51,18 +56,17 @@
           <span class="ear-label">왼쪽</span>
           <span class="ear-en">LEFT</span>
           <span class="pta-box">
-            <span class="pta-cap">4분법 평균</span>
+            <span class="signal" id="sigLeft"></span>
             <span class="pta-val" id="ptaLeft"></span>
           </span>
         </div>
         <div class="chart-wrap" id="chartLeft">
           <span class="normal-badge">정상 영역 (25dB 이하)</span>
-          <span class="severity-tag" id="sevLeft" hidden></span>
         </div>
       </article>
     </div>
 
-    <!-- 임피던스(고막운동성)검사: 오른쪽 / 정상 / 왼쪽 한 화면 -->
+    <!-- 임피던스(고막운동성)검사: 오른쪽 / 정상 / 왼쪽 -->
     <h2 class="section-title">임피던스(고막운동성)검사 <span>(고막과 중이의 상태)</span></h2>
     <div class="tymp-grid">
       <article class="tymp-panel">
@@ -79,22 +83,13 @@
       </article>
     </div>
 
-    <!-- 환자용 쉬운 설명 -->
-    <div class="explain">
-      <h3>쉽게 이해하기</h3>
-      <ul>
-        <li><b>순음청력검사</b>: 그래프의 점이 <b>위쪽(파란 영역)</b>에 있을수록 잘 들리는 것입니다. 평균이 <b>25dB 이하</b>면 정상입니다.</li>
-        <li><b>임피던스검사</b>: 가운데 <b>정상 참고</b> 그래프처럼 가운데에 봉우리(▲)가 있으면 고막 상태가 좋은 것입니다.</li>
-      </ul>
-      <details class="pta-input">
-        <summary>평균 청력(dB) 직접 입력 — 정도 자동 표시</summary>
-        <div class="pta-input-row">
-          <label>오른쪽 <input type="number" id="inRight" min="0" max="120" placeholder="예: 36" /> dB</label>
-          <label>왼쪽 <input type="number" id="inLeft" min="0" max="120" placeholder="예: 28" /> dB</label>
-        </div>
-        <p class="pta-input-note">입력하면 큰 숫자가 선명하게 바뀌고, 난청 정도가 표시됩니다. (검사지의 4분법 평균 dB 값을 보고 입력)</p>
-      </details>
-    </div>
+    <!-- 언어청력검사 결과 -->
+    <h2 class="section-title">언어청력검사 <span>(말소리 검사 결과)</span></h2>
+    <div class="capture-card" id="speechCapture"></div>
+
+    <!-- 이명검사 -->
+    <h2 class="section-title">이명검사 <span>(Tinnitogram)</span></h2>
+    <div class="tinnitus-grid" id="tinnitusGrid"></div>
   </section>
 
   <script type="module" src="app.js"></script>
