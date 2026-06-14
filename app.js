@@ -5,35 +5,38 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = "./vendor/pdf.worker.min.mjs";
 
 /* =========================================================
    우리 병원 결과지 템플릿 좌표 (페이지 비율, 항상 동일)
-   값은 [nx0, ny0, nx1, ny1] (0~1, 좌상단 기준)
 ========================================================= */
 const REGION = {
-  rightTymp:  [0.041, 0.460, 0.486, 0.695],
-  leftTymp:   [0.491, 0.460, 0.960, 0.695],
-  header:     [0.360, 0.029, 0.965, 0.118],
-  speech:     [0.038, 0.714, 0.965, 0.872],
-  tinnito:    [0.038, 0.873, 0.965, 0.960],
+  header:    [0.360, 0.029, 0.965, 0.118],
+  speech:    [0.038, 0.714, 0.965, 0.872],
+  tinnito:   [0.038, 0.873, 0.965, 0.960],
 };
 
-// 평균 dB 숫자 위치(페이지 비율) — OCR + 확대 표시
+// 평균 dB 숫자 위치(페이지 비율)
 const PTA_OCR = {
   right: [0.150, 0.1505, 0.207, 0.1596],
   left:  [0.826, 0.1495, 0.902, 0.1600],
 };
 
-// 좌우 동일 크기로 보이게 하는 오디오그램 표시 영역(그래프 박스 기준 정렬)
+// 좌우 동일 크기 오디오그램 표시 영역
 const AUDIO_DISPLAY = {
   right: [0.0342, 0.1401, 0.4403, 0.4477],
   left:  [0.4982, 0.1401, 0.9043, 0.4477],
 };
 
-// 오디오그램 축 보정(페이지 비율). 주파수=로그, dB=선형. 마커 위치 계산용.
-const AUDIO_CAL = {
-  right: { f1: 125, x1: 0.0842, f2: 8000, x2: 0.4175, d1: -10, y1: 0.1601, d2: 120, y2: 0.4167 },
-  left:  { f1: 125, x1: 0.5482, f2: 8000, x2: 0.8663, d1: -10, y1: 0.1601, d2: 120, y2: 0.4060 },
+// 좌우 동일 크기 임피던스 표시 영역
+const TYMP_DISPLAY = {
+  right: [0.0427, 0.462, 0.4852, 0.697],
+  left:  [0.4927, 0.462, 0.9352, 0.697],
 };
 
-// 이명표 셀(페이지 비율) — Rt/Lt 의 Pitch(Hz), Loudness(dB), 셀 테두리 안쪽
+// 오디오그램 축 보정(페이지 비율). 주파수=로그, dB=선형.
+const AUDIO_CAL = {
+  right: { f1: 125, x1: 0.0842, f2: 8000, x2: 0.4175, d1: -10, y1: 0.1601, d2: 120, y2: 0.4167, bL: 0.0842, bR: 0.4235 },
+  left:  { f1: 125, x1: 0.5482, f2: 8000, x2: 0.8663, d1: -10, y1: 0.1601, d2: 120, y2: 0.4060, bL: 0.5482, bR: 0.8761 },
+};
+
+// 이명표 셀(페이지 비율) — Rt/Lt 의 Pitch(Hz), Loudness(dB)
 const TINNITO_CELLS = {
   right: { pitch: [0.2405, 0.900, 0.363, 0.917], loud: [0.3705, 0.900, 0.493, 0.917] },
   left:  { pitch: [0.2405, 0.921, 0.363, 0.937], loud: [0.3705, 0.921, 0.493, 0.937] },
@@ -49,34 +52,90 @@ const loading = $("loading");
 const dropZone = $("dropZone");
 const fileInput = $("fileInput");
 const dropError = $("dropError");
+const deck = $("deck");
+const backBtn = $("backBtn");
 
 let ocrWorker = null;
+let lastPageCanvas = null;
+
+/* =========================================================
+   슬라이드 상태 머신
+========================================================= */
+const STATES = [
+  { page: "audio", sub: "0" },
+  { page: "audio", sub: "1" }, // 정상영역 빨간 테두리
+  { page: "audio", sub: "2" }, // dB 구간 배경색
+  { page: "audio", sub: "3" }, // speech banana + 그림 + 소리듣기
+  { page: "tymp" },
+  { page: "speech" },
+  { page: "tinnitus", callout: true },
+  { page: "tinnitus", callout: false }, // 콜아웃만 숨김(동그라미 유지)
+];
+let state = 0;
+
+function applyState(i) {
+  state = Math.max(0, Math.min(STATES.length - 1, i));
+  const s = STATES[state];
+  deck.querySelectorAll(".page").forEach((p) => { p.hidden = p.dataset.page !== s.page; });
+  const audioPage = deck.querySelector('[data-page="audio"]');
+  if (s.page === "audio") {
+    audioPage.dataset.sub = s.sub;
+    $("audioFab").hidden = s.sub !== "3";
+  }
+  if (s.page === "tinnitus") {
+    deck.querySelectorAll(".tin-callout").forEach((c) => { c.hidden = !s.callout; });
+  }
+  backBtn.hidden = state === 0;
+  $("hint").textContent =
+    state === STATES.length - 1 ? "마지막 화면입니다" : "화면을 클릭하면 다음 단계로 넘어갑니다";
+  window.scrollTo(0, 0);
+}
+function advance() { if (!resultScreen.hidden) applyState(state + 1); }
+function goBack() { if (!resultScreen.hidden) applyState(state - 1); }
+
+// 클릭/우클릭으로 진행 (버튼 등 .no-advance 는 제외)
+document.addEventListener("click", (e) => {
+  if (resultScreen.hidden) return;
+  if (e.target.closest(".no-advance") || e.target.closest("#dropScreen")) return;
+  advance();
+});
+document.addEventListener("contextmenu", (e) => {
+  if (resultScreen.hidden) return;
+  e.preventDefault();
+  if (e.target.closest(".no-advance")) return;
+  advance();
+});
+backBtn.addEventListener("click", (e) => { e.stopPropagation(); goBack(); });
 
 /* ---------- 드래그앤드롭 ---------- */
 $("pickBtn").addEventListener("click", () => fileInput.click());
-fileInput.addEventListener("change", (e) => {
-  if (e.target.files[0]) handleFile(e.target.files[0]);
-});
-$("resetBtn").addEventListener("click", () => {
+fileInput.addEventListener("change", (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+$("newBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
   resultScreen.hidden = true;
   dropScreen.hidden = false;
   dropError.hidden = true;
   fileInput.value = "";
 });
-
 ["dragenter", "dragover"].forEach((ev) =>
-  dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.add("drag"); })
-);
+  dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.add("drag"); }));
 ["dragleave", "drop"].forEach((ev) =>
-  dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.remove("drag"); })
-);
-dropZone.addEventListener("drop", (e) => {
-  const f = e.dataTransfer.files[0];
-  if (f) handleFile(f);
-});
+  dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.remove("drag"); }));
+dropZone.addEventListener("drop", (e) => { const f = e.dataTransfer.files[0]; if (f) handleFile(f); });
 dropZone.addEventListener("click", () => fileInput.click());
 
-/* ---------- OCR 준비 ---------- */
+/* ---------- 소리 듣기 ---------- */
+const player = $("player");
+$("audioFab").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const fab = e.currentTarget;
+  player.currentTime = 0;
+  player.play();
+  fab.classList.add("playing");
+});
+player.addEventListener("ended", () => $("audioFab").classList.remove("playing"));
+
+/* ---------- OCR ---------- */
 async function getWorker() {
   if (ocrWorker) return ocrWorker;
   ocrWorker = await createWorker("eng", 1, {
@@ -85,10 +144,7 @@ async function getWorker() {
     langPath: new URL("./vendor/tesseract/lang/", import.meta.url).href,
     gzip: true,
   });
-  await ocrWorker.setParameters({
-    tessedit_char_whitelist: "0123456789",
-    tessedit_pageseg_mode: "7", // 한 줄로 취급
-  });
+  await ocrWorker.setParameters({ tessedit_char_whitelist: "0123456789", tessedit_pageseg_mode: "7" });
   return ocrWorker;
 }
 
@@ -96,8 +152,7 @@ async function getWorker() {
 async function handleFile(file) {
   dropError.hidden = true;
   if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-    showError("PDF 파일만 올릴 수 있어요.");
-    return;
+    showError("PDF 파일만 올릴 수 있어요."); return;
   }
   dropScreen.hidden = true;
   loading.hidden = false;
@@ -110,13 +165,14 @@ async function handleFile(file) {
     pageCanvas.width = viewport.width;
     pageCanvas.height = viewport.height;
     await page.render({ canvasContext: pageCanvas.getContext("2d"), viewport }).promise;
+    lastPageCanvas = pageCanvas;
 
-    await renderStatic(pageCanvas);   // 그래프/표 등 즉시 표시
+    renderStatic(pageCanvas);
     loading.hidden = true;
     resultScreen.hidden = false;
-    window.scrollTo(0, 0);
+    applyState(0);
 
-    await renderOcr(pageCanvas);      // 숫자 인식은 이어서(시간 걸림)
+    await renderOcr(pageCanvas);
   } catch (err) {
     console.error(err);
     loading.hidden = true;
@@ -124,79 +180,72 @@ async function handleFile(file) {
     showError("결과지를 읽지 못했어요. 우리 병원 검사 결과지 PDF가 맞는지 확인해 주세요.");
   }
 }
+function showError(msg) { dropError.textContent = msg; dropError.hidden = false; }
 
-function showError(msg) {
-  dropError.textContent = msg;
-  dropError.hidden = false;
-}
-
-/* ---------- 영역 잘라내기 ---------- */
+/* ---------- 자르기 ---------- */
 function crop(src, [nx0, ny0, nx1, ny1]) {
   const sx = nx0 * src.width, sy = ny0 * src.height;
   const sw = (nx1 - nx0) * src.width, sh = (ny1 - ny0) * src.height;
   const c = document.createElement("canvas");
-  c.width = Math.round(sw);
-  c.height = Math.round(sh);
+  c.width = Math.round(sw); c.height = Math.round(sh);
   c.getContext("2d").drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height);
   return c;
 }
-
 function cropMagnify(src, frac, zoom = 3) {
   const [fx0, fy0, fx1, fy1] = frac;
   const sx = fx0 * src.width, sy = fy0 * src.height;
   const sw = (fx1 - fx0) * src.width, sh = (fy1 - fy0) * src.height;
   const c = document.createElement("canvas");
-  c.width = Math.round(sw * zoom);
-  c.height = Math.round(sh * zoom);
+  c.width = Math.round(sw * zoom); c.height = Math.round(sh * zoom);
   const ctx = c.getContext("2d");
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
   ctx.drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height);
   return c;
 }
-
-function placeCanvas(container, canvas) {
-  container.querySelectorAll("canvas").forEach((n) => n.remove());
+function setChart(container, canvas) {
+  container.querySelectorAll("canvas, .ovl, .snd-img, .banana-label").forEach((n) => n.remove());
   container.prepend(canvas);
 }
 
-/* ---------- 즉시 표시되는 부분 ---------- */
-async function renderStatic(pageCanvas) {
-  // 환자 정보
+/* ---------- 즉시 표시 ---------- */
+function renderStatic(pageCanvas) {
   const meta = $("patientMeta");
   meta.innerHTML = "";
   meta.appendChild(crop(pageCanvas, REGION.header));
 
-  // 좌우 동일 크기 오디오그램
-  placeCanvas($("chartRight"), crop(pageCanvas, AUDIO_DISPLAY.right));
-  placeCanvas($("chartLeft"), crop(pageCanvas, AUDIO_DISPLAY.left));
+  // 오디오그램(좌우 동일 크기) + 오버레이
+  setChart($("chartRight"), crop(pageCanvas, AUDIO_DISPLAY.right));
+  setChart($("chartLeft"), crop(pageCanvas, AUDIO_DISPLAY.left));
+  buildAudioOverlay("right", $("chartRight"));
+  buildAudioOverlay("left", $("chartLeft"));
 
-  // 평균 dB: 우선 확대 이미지로 채워두고, OCR 끝나면 깔끔한 글자로 교체
+  // 평균 dB (OCR 전 임시: 확대 이미지)
   $("ptaRight").innerHTML = "";
   $("ptaRight").appendChild(cropMagnify(pageCanvas, PTA_OCR.right));
   $("ptaLeft").innerHTML = "";
   $("ptaLeft").appendChild(cropMagnify(pageCanvas, PTA_OCR.left));
 
-  // 임피던스 3분할
-  placeCanvas($("tympRight"), crop(pageCanvas, REGION.rightTymp));
-  placeCanvas($("tympLeft"), crop(pageCanvas, REGION.leftTymp));
-  placeCanvas($("tympNormal"), drawNormalTympanogram());
+  // 임피던스(좌우 동일 크기)
+  $("tympRight").querySelectorAll("canvas").forEach((n) => n.remove());
+  $("tympRight").prepend(crop(pageCanvas, TYMP_DISPLAY.right));
+  $("tympLeft").querySelectorAll("canvas").forEach((n) => n.remove());
+  $("tympLeft").prepend(crop(pageCanvas, TYMP_DISPLAY.left));
+  $("tympNormal").querySelectorAll("canvas").forEach((n) => n.remove());
+  $("tympNormal").prepend(drawNormalTympanogram());
 
-  // 언어청력검사 결과 캡쳐
-  placeCanvas($("speechCapture"), crop(pageCanvas, REGION.speech));
+  // 언어청력 캡쳐
+  $("speechCapture").querySelectorAll("canvas").forEach((n) => n.remove());
+  $("speechCapture").prepend(crop(pageCanvas, REGION.speech));
 }
 
-/* ---------- OCR 이후 표시 ---------- */
+/* ---------- OCR 이후 ---------- */
 async function renderOcr(pageCanvas) {
   const worker = await getWorker();
-
-  // 1) 평균 dB
   const rDb = await ocrNumber(worker, pageCanvas, PTA_OCR.right);
   const lDb = await ocrNumber(worker, pageCanvas, PTA_OCR.left);
   applyPta("right", rDb);
   applyPta("left", lDb);
 
-  // 2) 이명표 OCR → 숫자 있는 쪽 찾기
   const tin = {};
   for (const side of ["right", "left"]) {
     const pitch = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].pitch);
@@ -204,70 +253,158 @@ async function renderOcr(pageCanvas) {
     tin[side] = { pitch, loud };
   }
   renderTinnitus(pageCanvas, tin);
+  applyState(state); // 콜아웃 표시 상태 동기화
 }
 
-/* 평균 dB 인식값 적용: 큰 글자 + 신호등 */
+// (테스트/시연용) 양쪽 이명 케이스 미리보기
+window.__demoBothTinnitus = () => {
+  renderTinnitus(lastPageCanvas, { right: { pitch: 2000, loud: 45 }, left: { pitch: 3000, loud: 30 } });
+  applyState(state);
+};
+
 function applyPta(side, db) {
   const el = $(side === "right" ? "ptaRight" : "ptaLeft");
   const sig = $(side === "right" ? "sigRight" : "sigLeft");
-  if (db == null) { sig.style.background = "#bbb"; return; } // 인식 실패 → 확대이미지 유지
+  if (db == null) { sig.style.background = "#bbb"; return; }
   el.innerHTML = `${db} dB`;
   sig.style.background = signalColor(db);
 }
-
-/* 정도에 따른 신호등 색(주석 없음) */
 function signalColor(db) {
-  if (db <= 25) return "#2ecc40";  // 정상 - 초록
-  if (db <= 40) return "#ffdf2b";  // 경도 - 노랑
-  if (db <= 55) return "#ff9f1a";  // 중등도 - 주황
-  if (db <= 70) return "#ff5a36";  // 중고도 - 진주황
-  if (db <= 90) return "#e02424";  // 고도 - 빨강
-  return "#8e0000";                // 심도 - 진빨강
+  if (db <= 25) return "#2ecc40";
+  if (db <= 40) return "#ffdf2b";
+  if (db <= 55) return "#ff9f1a";
+  if (db <= 70) return "#ff5a36";
+  if (db <= 90) return "#e02424";
+  return "#8e0000";
 }
 
-/* ---------- OCR 숫자 인식 ---------- */
+/* ---------- 오디오그램 좌표 ---------- */
+function geom(ear) {
+  const c = AUDIO_CAL[ear], d = AUDIO_DISPLAY[ear];
+  const Wd = d[2] - d[0], Hd = d[3] - d[1];
+  const xf = (hz) => (c.x1 + (Math.log10(hz / c.f1) / Math.log10(c.f2 / c.f1)) * (c.x2 - c.x1) - d[0]) / Wd;
+  const yf = (db) => (c.y1 + ((db - c.d1) / (c.d2 - c.d1)) * (c.y2 - c.y1) - d[1]) / Hd;
+  const xL = (c.bL - d[0]) / Wd, xR = (c.bR - d[0]) / Wd;
+  return { xf, yf, xL, xR };
+}
+
+/* 오버레이(빨간테두리 / dB구간색 / speech banana + 그림) 구성 */
+function buildAudioOverlay(ear, wrap) {
+  const g = geom(ear);
+  const X = (v) => (v * 100).toFixed(2);
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(SVGNS, "svg");
+  svg.setAttribute("class", "ovl");
+  svg.setAttribute("viewBox", "0 0 100 100");
+  svg.setAttribute("preserveAspectRatio", "none");
+
+  const rect = (x, y, w, h, attrs) => {
+    const r = document.createElementNS(SVGNS, "rect");
+    r.setAttribute("x", X(x)); r.setAttribute("y", X(y));
+    r.setAttribute("width", X(w)); r.setAttribute("height", X(h));
+    for (const k in attrs) r.setAttribute(k, attrs[k]);
+    return r;
+  };
+  const W = g.xR - g.xL;
+
+  // 1) 정상영역(≤25dB) 빨간 테두리
+  const gNormal = document.createElementNS(SVGNS, "g");
+  gNormal.setAttribute("class", "g-normal");
+  gNormal.appendChild(rect(g.xL, g.yf(-10), W, g.yf(25) - g.yf(-10),
+    { fill: "none", stroke: "#d62828", "stroke-width": "3", "vector-effect": "non-scaling-stroke" }));
+  svg.appendChild(gNormal);
+
+  // 2) dB 구간 배경색
+  const gZones = document.createElementNS(SVGNS, "g");
+  gZones.setAttribute("class", "g-zones");
+  gZones.appendChild(rect(g.xL, g.yf(25), W, g.yf(40) - g.yf(25), { fill: "rgba(255,236,120,.60)" }));
+  gZones.appendChild(rect(g.xL, g.yf(40), W, g.yf(70) - g.yf(40), { fill: "rgba(255,178,90,.55)" }));
+  gZones.appendChild(rect(g.xL, g.yf(70), W, g.yf(120) - g.yf(70), { fill: "rgba(255,150,180,.50)" }));
+  svg.appendChild(gZones);
+
+  // 3) speech banana
+  const gBanana = document.createElementNS(SVGNS, "g");
+  gBanana.setAttribute("class", "g-banana");
+  const top = [[250, 30], [500, 22], [1000, 18], [1500, 18], [2000, 20], [4000, 26], [6000, 32]];
+  const bot = [[6000, 52], [4000, 55], [2000, 56], [1500, 55], [1000, 53], [500, 48], [250, 42]];
+  let dpath = "";
+  top.forEach(([hz, db], i) => { dpath += (i ? "L" : "M") + X(g.xf(hz)) + "," + X(g.yf(db)) + " "; });
+  bot.forEach(([hz, db]) => { dpath += "L" + X(g.xf(hz)) + "," + X(g.yf(db)) + " "; });
+  dpath += "Z";
+  const path = document.createElementNS(SVGNS, "path");
+  path.setAttribute("d", dpath);
+  path.setAttribute("fill", "rgba(245,212,70,.45)");
+  path.setAttribute("stroke", "#bd9600");
+  path.setAttribute("stroke-width", "2");
+  path.setAttribute("stroke-dasharray", "4 3");
+  path.setAttribute("vector-effect", "non-scaling-stroke");
+  gBanana.appendChild(path);
+  svg.appendChild(gBanana);
+
+  wrap.appendChild(svg);
+
+  // speech banana 라벨 + 소리 그림(개/피아노/자동차) — HTML 오버레이
+  const label = document.createElement("div");
+  label.className = "banana-label";
+  label.textContent = "한국어 말소리 영역 (Speech Banana)";
+  pos(label, g.xf(1200), g.yf(8));
+  wrap.appendChild(label);
+
+  const imgs = [
+    { emo: "🐶", db: 70, fx: 0.32 },
+    { emo: "🎹", db: 80, fx: 0.52 },
+    { emo: "🚗", db: 100, fx: 0.74 },
+  ];
+  for (const it of imgs) {
+    const el = document.createElement("div");
+    el.className = "snd-img";
+    el.textContent = it.emo;
+    pos(el, g.xL + it.fx * W, g.yf(it.db));
+    wrap.appendChild(el);
+  }
+  function pos(el, fx, fy) {
+    el.style.left = (fx * 100).toFixed(2) + "%";
+    el.style.top = (fy * 100).toFixed(2) + "%";
+  }
+}
+
+/* ---------- OCR 숫자 ---------- */
 async function ocrNumber(worker, src, region) {
   const pre = preprocess(src, region);
-  if (pre.inkRatio < 0.004) return null; // 거의 빈칸
+  if (pre.inkRatio < 0.004) return null;
   const { data } = await worker.recognize(pre.canvas);
   const digits = (data.text || "").replace(/[^0-9]/g, "");
   if (!digits) return null;
   const n = parseInt(digits, 10);
   return Number.isFinite(n) ? n : null;
 }
-
-// 셀을 확대 + 회색조 + 흰 여백 추가(작은 글자 인식률 향상), 잉크 비율도 계산
 function preprocess(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30) {
   const sx = nx0 * src.width, sy = ny0 * src.height;
   const sw = (nx1 - nx0) * src.width, sh = (ny1 - ny0) * src.height;
   const dw = Math.round(sw * zoom), dh = Math.round(sh * zoom);
   const c = document.createElement("canvas");
-  c.width = dw + pad * 2;
-  c.height = dh + pad * 2;
+  c.width = dw + pad * 2; c.height = dh + pad * 2;
   const ctx = c.getContext("2d");
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, c.width, c.height);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
   ctx.drawImage(src, sx, sy, sw, sh, pad, pad, dw, dh);
   const img = ctx.getImageData(0, 0, c.width, c.height);
   const d = img.data;
   let ink = 0;
   for (let i = 0; i < d.length; i += 4) {
-    const g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-    if (g < 130) ink++;
-    d[i] = d[i + 1] = d[i + 2] = g;
+    const gg = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    if (gg < 130) ink++;
+    d[i] = d[i + 1] = d[i + 2] = gg;
   }
   ctx.putImageData(img, 0, 0);
   return { canvas: c, inkRatio: ink / (c.width * c.height) };
 }
 
-/* ---------- 이명검사 표시 ---------- */
+/* ---------- 이명검사 ---------- */
 function renderTinnitus(pageCanvas, tin) {
   const grid = $("tinnitusGrid");
   grid.innerHTML = "";
-
-  // 숫자(피치)가 있는 쪽 = 이명이 있는 쪽
+  // Pitch 수치가 있는 쪽 = 이명이 있는 쪽 (양쪽 모두 가능)
   const sides = ["right", "left"].filter((s) => tin[s].pitch != null);
 
   if (sides.length === 0) {
@@ -275,14 +412,17 @@ function renderTinnitus(pageCanvas, tin) {
     note.className = "tin-note";
     note.textContent = "이명검사에 기록된 수치가 없습니다. 아래 표를 참고하세요.";
     grid.appendChild(note);
+  } else if (sides.length === 2) {
+    const note = document.createElement("div");
+    note.className = "tin-note";
+    note.textContent = "양쪽 귀 모두 이명이 확인되어, 좌우 청력도에 각각 이명 위치를 표시했습니다.";
+    grid.appendChild(note);
   }
 
   for (const side of sides) {
-    const { pitch, loud } = tin[side];
-    grid.appendChild(buildTinnitusAudiogram(pageCanvas, side, pitch, loud));
+    grid.appendChild(buildTinnitusAudiogram(pageCanvas, side, tin[side].pitch, tin[side].loud));
   }
 
-  // 이명표 원본 캡쳐
   const tableCard = document.createElement("article");
   tableCard.className = "capture-card";
   tableCard.appendChild(crop(pageCanvas, REGION.tinnito));
@@ -296,7 +436,6 @@ function buildTinnitusAudiogram(pageCanvas, side, pitch, loud) {
 
   const panel = document.createElement("article");
   panel.className = "panel";
-
   const head = document.createElement("div");
   head.className = "tin-head";
   head.style.background = bannerColor;
@@ -307,39 +446,27 @@ function buildTinnitusAudiogram(pageCanvas, side, pitch, loud) {
   wrap.className = "chart-wrap";
   wrap.appendChild(crop(pageCanvas, AUDIO_DISPLAY[side]));
 
-  // 마커 위치(표시 영역 내부 비율)
   if (pitch != null && loud != null) {
-    const { fx, fy } = markerFrac(side, pitch, loud);
+    const g = geom(side);
+    const fx = g.xf(pitch), fy = g.yf(loud);
     const marker = document.createElement("span");
     marker.className = "tin-marker";
-    marker.style.left = `calc(10px + ${fx} * (100% - 20px))`;
-    marker.style.top = `calc(10px + ${fy} * (100% - 20px))`;
+    marker.style.left = (fx * 100).toFixed(2) + "%";
+    marker.style.top = (fy * 100).toFixed(2) + "%";
     wrap.appendChild(marker);
 
     const callout = document.createElement("span");
     callout.className = "tin-callout";
     callout.textContent = `이명 ${pitch}Hz · ${loud}dB`;
-    callout.style.left = `calc(10px + ${fx} * (100% - 20px))`;
-    callout.style.top = `calc(10px + ${fy} * (100% - 20px) - 34px)`;
+    callout.style.left = (fx * 100).toFixed(2) + "%";
+    callout.style.top = "calc(" + (fy * 100).toFixed(2) + "% - 30px)";
     wrap.appendChild(callout);
   }
   panel.appendChild(wrap);
   return panel;
 }
 
-// (주파수 Hz, 강도 dB) → 표시 영역 내부 비율
-function markerFrac(side, hz, db) {
-  const c = AUDIO_CAL[side];
-  const disp = AUDIO_DISPLAY[side];
-  const pageX = c.x1 + (Math.log10(hz / c.f1) / Math.log10(c.f2 / c.f1)) * (c.x2 - c.x1);
-  const pageY = c.y1 + ((db - c.d1) / (c.d2 - c.d1)) * (c.y2 - c.y1);
-  return {
-    fx: (pageX - disp[0]) / (disp[2] - disp[0]),
-    fy: (pageY - disp[1]) / (disp[3] - disp[1]),
-  };
-}
-
-/* ---------- 정상 참고 고막운동성(Type A) 그래프 ---------- */
+/* ---------- 정상 참고 고막운동성(Type A) ---------- */
 function drawNormalTympanogram() {
   const W = 480, H = 340;
   const c = document.createElement("canvas");
@@ -369,8 +496,8 @@ function drawNormalTympanogram() {
   for (let i = 0; i <= 180; i++) {
     const x = -600 + (i / 180) * 900;
     const y = base + peak * Math.exp(-((x - mu) ** 2) / (2 * sigma * sigma));
-    const X = px(x), Y = py(y);
-    if (i === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+    const PX = px(x), PY = py(y);
+    if (i === 0) ctx.moveTo(PX, PY); else ctx.lineTo(PX, PY);
   }
   ctx.stroke();
   ctx.fillStyle = "#149646";
