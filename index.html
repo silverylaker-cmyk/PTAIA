@@ -28,11 +28,7 @@
 
   <!-- 2단계: 결과(슬라이드) 화면 -->
   <section id="resultScreen" class="result-screen" hidden>
-    <header class="topbar">
-      <div class="topbar-meta" id="patientMeta"></div>
-      <button id="newBtn" class="reset-btn no-advance" type="button">새 파일</button>
-      <button id="backBtn" class="reset-btn no-advance" type="button" hidden>← 이전 페이지</button>
-    </header>
+    <button id="backBtn" class="back-fab no-advance" type="button" hidden>← 이전</button>
 
     <div id="deck">
       <!-- 순음청력검사 -->
@@ -71,7 +67,6 @@
 
       <!-- 임피던스 -->
       <section class="page" data-page="tymp" hidden>
-        <h2 class="page-title">임피던스(고막운동성)검사 <span>(고막과 중이의 상태)</span></h2>
         <div class="tymp-grid">
           <article class="tymp-panel">
             <div class="tymp-head head-right">오른쪽 <span>RIGHT</span></div>

@@ -110,13 +110,6 @@ backBtn.addEventListener("click", (e) => { e.stopPropagation(); goBack(); });
 /* ---------- 드래그앤드롭 ---------- */
 $("pickBtn").addEventListener("click", () => fileInput.click());
 fileInput.addEventListener("change", (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
-$("newBtn").addEventListener("click", (e) => {
-  e.stopPropagation();
-  resultScreen.hidden = true;
-  dropScreen.hidden = false;
-  dropError.hidden = true;
-  fileInput.value = "";
-});
 ["dragenter", "dragover"].forEach((ev) =>
   dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.add("drag"); }));
 ["dragleave", "drop"].forEach((ev) =>
@@ -209,10 +202,6 @@ function setChart(container, canvas) {
 
 /* ---------- 즉시 표시 ---------- */
 function renderStatic(pageCanvas) {
-  const meta = $("patientMeta");
-  meta.innerHTML = "";
-  meta.appendChild(crop(pageCanvas, REGION.header));
-
   // 오디오그램(좌우 동일 크기) + 오버레이
   setChart($("chartRight"), crop(pageCanvas, AUDIO_DISPLAY.right));
   setChart($("chartLeft"), crop(pageCanvas, AUDIO_DISPLAY.left));
@@ -325,8 +314,8 @@ function buildAudioOverlay(ear, wrap) {
   // 3) speech banana (Cochlear 차트 기준 모양)
   const gBanana = document.createElementNS(SVGNS, "g");
   gBanana.setAttribute("class", "g-banana");
-  const top = [[250, 20], [400, 26], [600, 30], [800, 32], [1000, 31], [1300, 27], [1700, 22], [2500, 18], [4000, 16], [6000, 18], [8000, 25]];
-  const bot = [[8000, 42], [6000, 41], [4000, 43], [2500, 47], [1700, 52], [1300, 57], [1000, 61], [800, 60], [600, 54], [400, 49], [250, 45]];
+  const top = [[250, 20], [400, 26], [600, 30], [800, 32], [1000, 31], [1300, 27], [1700, 22], [2500, 18], [4000, 16], [6000, 17], [8000, 18]];
+  const bot = [[8000, 25], [6000, 30], [4000, 40], [2500, 47], [1700, 52], [1300, 57], [1000, 61], [800, 60], [600, 54], [400, 49], [250, 45]];
   let dpath = "";
   top.forEach(([hz, db], i) => { dpath += (i ? "L" : "M") + X(g.xf(hz)) + "," + X(g.yf(db)) + " "; });
   bot.forEach(([hz, db]) => { dpath += "L" + X(g.xf(hz)) + "," + X(g.yf(db)) + " "; });
@@ -373,7 +362,7 @@ function buildAudioOverlay(ear, wrap) {
   const imgs = [
     { emo: "🐶", db: 70, fx: 0.32 },
     { emo: "🎹", db: 80, fx: 0.52 },
-    { emo: "🚗", db: 100, fx: 0.74 },
+    { emo: "🚗", db: 97, fx: 0.74 },
   ];
   for (const it of imgs) {
     const el = document.createElement("div");
