@@ -300,7 +300,7 @@ function buildAudioOverlay(ear, wrap) {
   const gNormal = document.createElementNS(SVGNS, "g");
   gNormal.setAttribute("class", "g-normal");
   gNormal.appendChild(rect(g.xL, g.yf(-10), W, g.yf(25) - g.yf(-10),
-    { fill: "none", stroke: "#d62828", "stroke-width": "3", "vector-effect": "non-scaling-stroke" }));
+    { fill: "none", stroke: "#d62828", "stroke-width": "9", "vector-effect": "non-scaling-stroke" }));
   svg.appendChild(gNormal);
 
   // 2) dB 구간 배경색
