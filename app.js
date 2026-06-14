@@ -322,33 +322,53 @@ function buildAudioOverlay(ear, wrap) {
   gZones.appendChild(rect(g.xL, g.yf(70), W, g.yf(120) - g.yf(70), { fill: "rgba(255,150,180,.50)" }));
   svg.appendChild(gZones);
 
-  // 3) speech banana
+  // 3) speech banana (Cochlear 차트 기준 모양)
   const gBanana = document.createElementNS(SVGNS, "g");
   gBanana.setAttribute("class", "g-banana");
-  const top = [[250, 30], [500, 22], [1000, 18], [1500, 18], [2000, 20], [4000, 26], [6000, 32]];
-  const bot = [[6000, 52], [4000, 55], [2000, 56], [1500, 55], [1000, 53], [500, 48], [250, 42]];
+  const top = [[250, 20], [400, 26], [600, 30], [800, 32], [1000, 31], [1300, 27], [1700, 22], [2500, 18], [4000, 16], [6000, 18], [8000, 25]];
+  const bot = [[8000, 42], [6000, 41], [4000, 43], [2500, 47], [1700, 52], [1300, 57], [1000, 61], [800, 60], [600, 54], [400, 49], [250, 45]];
   let dpath = "";
   top.forEach(([hz, db], i) => { dpath += (i ? "L" : "M") + X(g.xf(hz)) + "," + X(g.yf(db)) + " "; });
   bot.forEach(([hz, db]) => { dpath += "L" + X(g.xf(hz)) + "," + X(g.yf(db)) + " "; });
   dpath += "Z";
   const path = document.createElementNS(SVGNS, "path");
   path.setAttribute("d", dpath);
-  path.setAttribute("fill", "rgba(245,212,70,.45)");
-  path.setAttribute("stroke", "#bd9600");
+  path.setAttribute("fill", "rgba(150,152,158,.30)");
+  path.setAttribute("stroke", "#7a7d85");
   path.setAttribute("stroke-width", "2");
-  path.setAttribute("stroke-dasharray", "4 3");
+  path.setAttribute("stroke-dasharray", "5 3");
   path.setAttribute("vector-effect", "non-scaling-stroke");
   gBanana.appendChild(path);
   svg.appendChild(gBanana);
 
   wrap.appendChild(svg);
 
-  // speech banana 라벨 + 소리 그림(개/피아노/자동차) — HTML 오버레이
+  // speech banana 라벨 + 음소 알파벳 + 소리 그림 — HTML 오버레이
   const label = document.createElement("div");
   label.className = "banana-label";
-  label.textContent = "한국어 말소리 영역 (Speech Banana)";
-  pos(label, g.xf(1200), g.yf(8));
+  label.textContent = "Speech Banana (말소리 영역)";
+  pos(label, g.xf(900), g.yf(7));
   wrap.appendChild(label);
+
+  // 음소 알파벳 (Cochlear 차트 위치 기준 Hz·dB)
+  const PHONEMES = [
+    ["z", 250, 30], ["v", 320, 30],
+    ["p", 1400, 27], ["h", 1500, 33], ["g", 1680, 37],
+    ["k", 3000, 30], ["f", 4400, 28], ["s", 5200, 29], ["th", 6000, 28],
+    ["J", 250, 42], ["m", 330, 41], ["d", 400, 41], ["b", 470, 41],
+    ["ch", 1450, 42], ["sh", 1950, 42],
+    ["n", 320, 46], ["ng", 345, 50],
+    ["e", 330, 54], ["u", 390, 54],
+    ["l", 620, 50],
+    ["o", 820, 45], ["a", 930, 46], ["r", 1080, 46],
+  ];
+  for (const [t, hz, db] of PHONEMES) {
+    const el = document.createElement("div");
+    el.className = "phoneme";
+    el.textContent = t;
+    pos(el, g.xf(hz), g.yf(db));
+    wrap.appendChild(el);
+  }
 
   const imgs = [
     { emo: "🐶", db: 70, fx: 0.32 },
