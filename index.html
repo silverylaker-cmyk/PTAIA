@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>청력검사 결과 쉽게보기</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- 1단계: 드래그앤드롭 화면 -->
+  <section id="dropScreen" class="drop-screen">
+    <div class="brand">청력검사 결과 <b>쉽게보기</b></div>
+    <div id="dropZone" class="dropzone">
+      <div class="dz-icon">📄</div>
+      <p class="dz-title">여기에 검사 결과 PDF를 끌어다 놓으세요</p>
+      <p class="dz-sub">순음청력검사 · 임피던스청력검사 결과지</p>
+      <button id="pickBtn" class="dz-btn" type="button">또는 파일 선택</button>
+      <input id="fileInput" type="file" accept="application/pdf" hidden />
+    </div>
+    <p id="dropError" class="drop-error" hidden></p>
+  </section>
+
+  <!-- 2단계: 결과 화면 -->
+  <section id="resultScreen" class="result-screen" hidden>
+    <header class="topbar">
+      <div class="topbar-title">청력검사 결과</div>
+      <div class="topbar-meta" id="patientMeta"></div>
+      <button id="resetBtn" class="reset-btn" type="button">새 파일 보기</button>
+    </header>
+
+    <!-- 순음청력검사 -->
+    <h2 class="section-title">순음청력검사 <span>(소리를 얼마나 잘 듣는지)</span></h2>
+    <div class="audio-grid">
+      <article class="panel" data-ear="right">
+        <div class="panel-banner banner-right">
+          <span class="ear-label">오른쪽</span>
+          <span class="ear-en">RIGHT</span>
+          <span class="pta-box">
+            <span class="pta-cap">4분법 평균</span>
+            <span class="pta-val" id="ptaRight"></span>
+          </span>
+        </div>
+        <div class="chart-wrap" id="chartRight">
+          <span class="normal-badge">정상 영역 (25dB 이하)</span>
+          <span class="severity-tag" id="sevRight" hidden></span>
+        </div>
+      </article>
+
+      <article class="panel" data-ear="left">
+        <div class="panel-banner banner-left">
+          <span class="ear-label">왼쪽</span>
+          <span class="ear-en">LEFT</span>
+          <span class="pta-box">
+            <span class="pta-cap">4분법 평균</span>
+            <span class="pta-val" id="ptaLeft"></span>
+          </span>
+        </div>
+        <div class="chart-wrap" id="chartLeft">
+          <span class="normal-badge">정상 영역 (25dB 이하)</span>
+          <span class="severity-tag" id="sevLeft" hidden></span>
+        </div>
+      </article>
+    </div>
+
+    <!-- 임피던스(고막운동성)검사: 오른쪽 / 정상 / 왼쪽 한 화면 -->
+    <h2 class="section-title">임피던스(고막운동성)검사 <span>(고막과 중이의 상태)</span></h2>
+    <div class="tymp-grid">
+      <article class="tymp-panel">
+        <div class="tymp-head head-right">오른쪽 <span>RIGHT</span></div>
+        <div class="tymp-wrap" id="tympRight"></div>
+      </article>
+      <article class="tymp-panel">
+        <div class="tymp-head head-normal">정상 참고 <span>NORMAL</span></div>
+        <div class="tymp-wrap" id="tympNormal"></div>
+      </article>
+      <article class="tymp-panel">
+        <div class="tymp-head head-left">왼쪽 <span>LEFT</span></div>
+        <div class="tymp-wrap" id="tympLeft"></div>
+      </article>
+    </div>
+
+    <!-- 환자용 쉬운 설명 -->
+    <div class="explain">
+      <h3>쉽게 이해하기</h3>
+      <ul>
+        <li><b>순음청력검사</b>: 그래프의 점이 <b>위쪽(파란 영역)</b>에 있을수록 잘 들리는 것입니다. 평균이 <b>25dB 이하</b>면 정상입니다.</li>
+        <li><b>임피던스검사</b>: 가운데 <b>정상 참고</b> 그래프처럼 가운데에 봉우리(▲)가 있으면 고막 상태가 좋은 것입니다.</li>
+      </ul>
+      <details class="pta-input">
+        <summary>평균 청력(dB) 직접 입력 — 정도 자동 표시</summary>
+        <div class="pta-input-row">
+          <label>오른쪽 <input type="number" id="inRight" min="0" max="120" placeholder="예: 36" /> dB</label>
+          <label>왼쪽 <input type="number" id="inLeft" min="0" max="120" placeholder="예: 28" /> dB</label>
+        </div>
+        <p class="pta-input-note">입력하면 큰 숫자가 선명하게 바뀌고, 난청 정도가 표시됩니다. (검사지의 4분법 평균 dB 값을 보고 입력)</p>
+      </details>
+    </div>
+  </section>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

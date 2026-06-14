@@ -1,0 +1,11 @@
+# 환자 검사 결과 / 개인정보 (절대 커밋 금지)
+*.pdf
+samples/
+# 미리보기/임시 이미지
+*.png
+*.jpg
+app_*.png
+mock_*.png
+# 시스템
+.DS_Store
+node_modules/
