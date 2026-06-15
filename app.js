@@ -247,15 +247,16 @@ function renderStatic(pageCanvas) {
 /* ---------- OCR 이후 ---------- */
 async function renderOcr(pageCanvas) {
   const worker = await getWorker();
-  const rDb = await ocrNumber(worker, pageCanvas, PTA_OCR.right, 119);
-  const lDb = await ocrNumber(worker, pageCanvas, PTA_OCR.left, 119);
+  const ptaOpts = { max: 119, whitelist: "0123456789d. " };
+  const rDb = await ocrNumber(worker, pageCanvas, PTA_OCR.right, ptaOpts);
+  const lDb = await ocrNumber(worker, pageCanvas, PTA_OCR.left, ptaOpts);
   applyPta("right", rDb);
   applyPta("left", lDb);
 
   const tin = {};
   for (const side of ["right", "left"]) {
     const pitch = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].pitch);
-    const loud = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].loud, 130);
+    const loud = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].loud, { max: 130 });
     tin[side] = { pitch, loud };
   }
   renderTinnitus(pageCanvas, tin);
@@ -389,21 +390,25 @@ function buildAudioOverlay(ear, wrap) {
 }
 
 /* ---------- OCR 숫자 ---------- */
-async function ocrNumber(worker, src, region, maxVal = null) {
+async function ocrNumber(worker, src, region, opts = {}) {
+  const { max = null, whitelist = "0123456789" } = opts;
   const pre = preprocess(src, region);
   if (pre.inkRatio < 0.004) return null;
+  await worker.setParameters({ tessedit_char_whitelist: whitelist });
   const { data } = await worker.recognize(pre.canvas);
-  let digits = (data.text || "").replace(/[^0-9]/g, "");
-  if (!digits) return null;
+  // 맨 앞 숫자 묶음만 사용 ("dB" 등 단위 글자는 글자로 인식돼 무시됨)
+  const m = (data.text || "").match(/\d{1,4}/);
+  if (!m) return null;
+  let digits = m[0];
   let n = parseInt(digits, 10);
   if (!Number.isFinite(n)) return null;
-  if (maxVal != null) {
-    // OCR이 끝에 0을 덧붙이는 오류 보정 (예: 16 -> 160). 최대치 초과면 끝자리 0 제거
-    while (n > maxVal && digits.length > 1 && digits.endsWith("0")) {
+  if (max != null) {
+    // OCR이 끝에 0을 덧붙이는 오류 보정 (예: 16 -> 160)
+    while (n > max && digits.length > 1 && digits.endsWith("0")) {
       digits = digits.slice(0, -1);
       n = parseInt(digits, 10);
     }
-    if (n > maxVal) return null; // 그래도 비정상이면 인식 실패 처리
+    if (n > max) return null;
   }
   return n;
 }
@@ -432,30 +437,19 @@ function preprocess(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30) {
 /* ---------- 이명검사 ---------- */
 function renderTinnitus(pageCanvas, tin) {
   const grid = $("tinnitusGrid");
+  const tinTable = $("tinTable");
   grid.innerHTML = "";
+  tinTable.innerHTML = "";
   // Pitch 수치가 있는 쪽 = 이명이 있는 쪽 (양쪽 모두 가능)
   const sides = ["right", "left"].filter((s) => tin[s].pitch != null);
 
-  if (sides.length === 0) {
-    const note = document.createElement("div");
-    note.className = "tin-note";
-    note.textContent = "이명검사에 기록된 수치가 없습니다. 아래 표를 참고하세요.";
-    grid.appendChild(note);
-  } else if (sides.length === 2) {
-    const note = document.createElement("div");
-    note.className = "tin-note";
-    note.textContent = "양쪽 귀 모두 이명이 확인되어, 좌우 청력도에 각각 이명 위치를 표시했습니다.";
-    grid.appendChild(note);
-  }
+  // 좌측 상단: 이명검사 표 캡쳐
+  tinTable.appendChild(crop(pageCanvas, REGION.tinnito));
 
+  // 하단: 이명이 있는 쪽 청력도(들)
   for (const side of sides) {
     grid.appendChild(buildTinnitusAudiogram(pageCanvas, side, tin[side].pitch, tin[side].loud));
   }
-
-  const tableCard = document.createElement("article");
-  tableCard.className = "capture-card";
-  tableCard.appendChild(crop(pageCanvas, REGION.tinnito));
-  grid.appendChild(tableCard);
 }
 
 function buildTinnitusAudiogram(pageCanvas, side, pitch, loud) {
@@ -488,7 +482,7 @@ function buildTinnitusAudiogram(pageCanvas, side, pitch, loud) {
     callout.className = "tin-callout";
     callout.textContent = `이명 ${pitch}Hz · ${loud}dB`;
     callout.style.left = (fx * 100).toFixed(2) + "%";
-    callout.style.top = "calc(" + (fy * 100).toFixed(2) + "% - 30px)";
+    callout.style.top = "calc(" + (fy * 100).toFixed(2) + "% - 22px)"; // 동그라미 위로 띄움
     wrap.appendChild(callout);
   }
   panel.appendChild(wrap);
