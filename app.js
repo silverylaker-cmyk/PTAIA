@@ -81,6 +81,7 @@ function applyState(i) {
   if (s.page === "audio") {
     audioPage.dataset.sub = s.sub;
     $("audioFab").hidden = s.sub !== "3";
+    requestAnimationFrame(positionSpeechZoneLabel);
   }
   if (s.page === "tinnitus") {
     deck.querySelectorAll(".tin-callout").forEach((c) => { c.hidden = !s.callout; });
@@ -90,6 +91,22 @@ function applyState(i) {
     state === STATES.length - 1 ? "마지막 화면입니다" : "화면을 클릭하면 다음 단계로 넘어갑니다";
   window.scrollTo(0, 0);
 }
+
+// "말소리 영역" 라벨을 좌우 그래프 사이, 35dB(30~40dB) 높이에 배치
+function positionSpeechZoneLabel() {
+  const grid = document.querySelector(".audio-grid");
+  const label = document.getElementById("speechZoneLabel");
+  const chart = document.getElementById("chartRight");
+  if (!grid || !label || !chart) return;
+  const g = grid.getBoundingClientRect();
+  const c = chart.getBoundingClientRect();
+  if (c.height === 0) return;
+  label.style.left = "50%";
+  label.style.top = (c.top - g.top + 0.348 * c.height) + "px"; // 35dB 부근
+}
+window.addEventListener("resize", () => {
+  if (!resultScreen.hidden) requestAnimationFrame(positionSpeechZoneLabel);
+});
 function advance() { if (!resultScreen.hidden) applyState(state + 1); }
 function goBack() { if (!resultScreen.hidden) applyState(state - 1); }
 
@@ -332,13 +349,7 @@ function buildAudioOverlay(ear, wrap) {
 
   wrap.appendChild(svg);
 
-  // speech banana 라벨 + 음소 알파벳 + 소리 그림 — HTML 오버레이
-  const label = document.createElement("div");
-  label.className = "banana-label";
-  label.textContent = "Speech Banana (말소리 영역)";
-  pos(label, g.xf(900), g.yf(7));
-  wrap.appendChild(label);
-
+  // 음소 알파벳 + 소리 그림 — HTML 오버레이
   // 음소 알파벳 (Cochlear 차트 위치 기준 Hz·dB)
   const PHONEMES = [
     ["z", 250, 30], ["v", 320, 30],
