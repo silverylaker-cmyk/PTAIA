@@ -6,6 +6,9 @@ samples/
 *.jpg
 app_*.png
 mock_*.png
+# 단, 앱 자산(assets) 이미지는 커밋
+!assets/
+!assets/*.png
 # 시스템
 .DS_Store
 node_modules/

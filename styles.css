@@ -104,7 +104,7 @@ body{
 .head-left{background:var(--blue)}
 .head-normal{background:var(--green)}
 .tymp-wrap{padding:10px;line-height:0;flex:1;display:flex;align-items:center}
-.tymp-wrap canvas{width:100%;height:auto;display:block}
+.tymp-wrap canvas,.tymp-wrap img{width:100%;height:auto;display:block}
 
 /* 캡쳐 카드 */
 .capture-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;line-height:0;width:100%}

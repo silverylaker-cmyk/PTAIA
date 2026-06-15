@@ -236,8 +236,11 @@ function renderStatic(pageCanvas) {
   $("tympRight").prepend(crop(pageCanvas, TYMP_DISPLAY.right));
   $("tympLeft").querySelectorAll("canvas").forEach((n) => n.remove());
   $("tympLeft").prepend(crop(pageCanvas, TYMP_DISPLAY.left));
-  $("tympNormal").querySelectorAll("canvas").forEach((n) => n.remove());
-  $("tympNormal").prepend(drawNormalTympanogram());
+  $("tympNormal").innerHTML = "";
+  const normImg = document.createElement("img");
+  normImg.src = "assets/normal_tymp.png";
+  normImg.alt = "정상 고막운동성 예시";
+  $("tympNormal").appendChild(normImg);
 
   // 언어청력 캡쳐
   $("speechCapture").querySelectorAll("canvas").forEach((n) => n.remove());
@@ -487,47 +490,4 @@ function buildTinnitusAudiogram(pageCanvas, side, pitch, loud) {
   }
   panel.appendChild(wrap);
   return panel;
-}
-
-/* ---------- 정상 참고 고막운동성(Type A) ---------- */
-function drawNormalTympanogram() {
-  const W = 480, H = 340;
-  const c = document.createElement("canvas");
-  c.width = W; c.height = H;
-  const ctx = c.getContext("2d");
-  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
-  const m = { l: 46, r: 16, t: 14, b: 40 };
-  const px = (daPa) => m.l + ((daPa + 600) / 900) * (W - m.l - m.r);
-  const py = (ml) => H - m.b - (ml / 2) * (H - m.t - m.b);
-  ctx.strokeStyle = "#bbb"; ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(m.l, py(0)); ctx.lineTo(W - m.r, py(0));
-  ctx.moveTo(m.l, m.t); ctx.lineTo(m.l, py(0));
-  ctx.stroke();
-  ctx.fillStyle = "#555"; ctx.font = "12px sans-serif";
-  [-600, -300, 0, 300].forEach((v) => { ctx.textAlign = "center"; ctx.fillText(String(v), px(v), py(0) + 16); });
-  [0, 1, 2].forEach((v) => { ctx.textAlign = "right"; ctx.fillText(String(v), m.l - 6, py(v) + 4); });
-  ctx.textAlign = "left";
-  ctx.fillText("ml", m.l - 2, m.t);
-  ctx.fillText("daPa", W - m.r - 34, py(0) + 30);
-  ctx.setLineDash([5, 4]); ctx.strokeStyle = "#999";
-  ctx.strokeRect(px(-150), py(1.6), px(50) - px(-150), py(0.3) - py(1.6));
-  ctx.setLineDash([]);
-  ctx.strokeStyle = "#149646"; ctx.lineWidth = 3;
-  ctx.beginPath();
-  const mu = 0, sigma = 90, peak = 0.95, base = 0.08;
-  for (let i = 0; i <= 180; i++) {
-    const x = -600 + (i / 180) * 900;
-    const y = base + peak * Math.exp(-((x - mu) ** 2) / (2 * sigma * sigma));
-    const PX = px(x), PY = py(y);
-    if (i === 0) ctx.moveTo(PX, PY); else ctx.lineTo(PX, PY);
-  }
-  ctx.stroke();
-  ctx.fillStyle = "#149646";
-  ctx.beginPath();
-  ctx.moveTo(px(0), py(1.03) - 2);
-  ctx.lineTo(px(0) - 7, py(1.03) - 14);
-  ctx.lineTo(px(0) + 7, py(1.03) - 14);
-  ctx.closePath(); ctx.fill();
-  return c;
 }
