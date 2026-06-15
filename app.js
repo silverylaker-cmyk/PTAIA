@@ -38,8 +38,8 @@ const AUDIO_CAL = {
 
 // 이명표 셀(페이지 비율) — Rt/Lt 의 Pitch(Hz), Loudness(dB)
 const TINNITO_CELLS = {
-  right: { pitch: [0.2405, 0.900, 0.363, 0.917], loud: [0.3705, 0.900, 0.493, 0.917] },
-  left:  { pitch: [0.2405, 0.921, 0.363, 0.937], loud: [0.3705, 0.921, 0.493, 0.937] },
+  right: { pitch: [0.2385, 0.900, 0.363, 0.917], loud: [0.369, 0.900, 0.493, 0.917] },
+  left:  { pitch: [0.2385, 0.921, 0.363, 0.937], loud: [0.369, 0.921, 0.493, 0.937] },
 };
 
 const RENDER_SCALE = 3.2;
@@ -439,19 +439,56 @@ function preprocess(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30) {
 
 /* ---------- 이명검사 ---------- */
 function renderTinnitus(pageCanvas, tin) {
-  const grid = $("tinnitusGrid");
-  const tinTable = $("tinTable");
-  grid.innerHTML = "";
-  tinTable.innerHTML = "";
-  // Pitch 수치가 있는 쪽 = 이명이 있는 쪽 (양쪽 모두 가능)
+  const pageEl = $("tinnitusPage");
+  pageEl.innerHTML = "";
+  // Pitch 수치가 있는 쪽 = 이명이 있는 쪽
   const sides = ["right", "left"].filter((s) => tin[s].pitch != null);
 
-  // 좌측 상단: 이명검사 표 캡쳐
-  tinTable.appendChild(crop(pageCanvas, REGION.tinnito));
+  const title = (cls) => {
+    const h = document.createElement("h2");
+    h.className = "page-title" + (cls ? " " + cls : "");
+    h.innerHTML = "이명검사 <span>(Tinnitogram)</span>";
+    return h;
+  };
+  const tableCapture = () => {
+    const c = document.createElement("article");
+    c.className = "capture-card";
+    c.appendChild(crop(pageCanvas, REGION.tinnito));
+    return c;
+  };
 
-  // 하단: 이명이 있는 쪽 청력도(들)
-  for (const side of sides) {
-    grid.appendChild(buildTinnitusAudiogram(pageCanvas, side, tin[side].pitch, tin[side].loud));
+  if (sides.length === 2) {
+    // 양측 이명: 새 스타일 (제목 우상단 · 표 좌상단 · 청력도 하단)
+    const top = document.createElement("div");
+    top.className = "tin-top";
+    const tbl = document.createElement("div");
+    tbl.className = "tin-table";
+    tbl.appendChild(crop(pageCanvas, REGION.tinnito));
+    top.appendChild(tbl);
+    top.appendChild(title("tin-title"));
+    pageEl.appendChild(top);
+
+    const charts = document.createElement("div");
+    charts.className = "tin-charts";
+    for (const side of sides) {
+      charts.appendChild(buildTinnitusAudiogram(pageCanvas, side, tin[side].pitch, tin[side].loud));
+    }
+    pageEl.appendChild(charts);
+  } else {
+    // 한쪽 이명 또는 기록 없음: 이전 스타일 (제목 상단 중앙 · 청력도+표 나란히)
+    pageEl.appendChild(title());
+    const grid = document.createElement("div");
+    grid.className = "tinnitus-grid";
+    if (sides.length === 1) {
+      grid.appendChild(buildTinnitusAudiogram(pageCanvas, sides[0], tin[sides[0]].pitch, tin[sides[0]].loud));
+    } else {
+      const note = document.createElement("div");
+      note.className = "tin-note";
+      note.textContent = "이명검사에 기록된 수치가 없습니다. 아래 표를 참고하세요.";
+      grid.appendChild(note);
+    }
+    grid.appendChild(tableCapture());
+    pageEl.appendChild(grid);
   }
 }
 
