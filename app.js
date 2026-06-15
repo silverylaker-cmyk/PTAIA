@@ -230,15 +230,15 @@ function renderStatic(pageCanvas) {
 /* ---------- OCR 이후 ---------- */
 async function renderOcr(pageCanvas) {
   const worker = await getWorker();
-  const rDb = await ocrNumber(worker, pageCanvas, PTA_OCR.right);
-  const lDb = await ocrNumber(worker, pageCanvas, PTA_OCR.left);
+  const rDb = await ocrNumber(worker, pageCanvas, PTA_OCR.right, 119);
+  const lDb = await ocrNumber(worker, pageCanvas, PTA_OCR.left, 119);
   applyPta("right", rDb);
   applyPta("left", lDb);
 
   const tin = {};
   for (const side of ["right", "left"]) {
     const pitch = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].pitch);
-    const loud = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].loud);
+    const loud = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].loud, 130);
     tin[side] = { pitch, loud };
   }
   renderTinnitus(pageCanvas, tin);
@@ -378,14 +378,23 @@ function buildAudioOverlay(ear, wrap) {
 }
 
 /* ---------- OCR 숫자 ---------- */
-async function ocrNumber(worker, src, region) {
+async function ocrNumber(worker, src, region, maxVal = null) {
   const pre = preprocess(src, region);
   if (pre.inkRatio < 0.004) return null;
   const { data } = await worker.recognize(pre.canvas);
-  const digits = (data.text || "").replace(/[^0-9]/g, "");
+  let digits = (data.text || "").replace(/[^0-9]/g, "");
   if (!digits) return null;
-  const n = parseInt(digits, 10);
-  return Number.isFinite(n) ? n : null;
+  let n = parseInt(digits, 10);
+  if (!Number.isFinite(n)) return null;
+  if (maxVal != null) {
+    // OCR이 끝에 0을 덧붙이는 오류 보정 (예: 16 -> 160). 최대치 초과면 끝자리 0 제거
+    while (n > maxVal && digits.length > 1 && digits.endsWith("0")) {
+      digits = digits.slice(0, -1);
+      n = parseInt(digits, 10);
+    }
+    if (n > maxVal) return null; // 그래도 비정상이면 인식 실패 처리
+  }
+  return n;
 }
 function preprocess(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30) {
   const sx = nx0 * src.width, sy = ny0 * src.height;
