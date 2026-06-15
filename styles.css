@@ -37,14 +37,14 @@ body{
 /* ---------- 결과(슬라이드) 화면 — 전체 화면 채우기 ---------- */
 .result-screen{width:100%;min-height:100vh;margin:0;padding:0}
 #deck{width:100%}
-.page{min-height:100vh;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:18px 26px 56px}
+.page{min-height:100vh;display:flex;flex-direction:column;justify-content:center;gap:32px;padding:18px 26px 56px}
 
 /* 이전 버튼(떠있는 버튼, 우측 상단) */
 .back-fab{position:fixed;top:14px;right:18px;z-index:50;border:0;background:rgba(35,46,68,.86);color:#fff;font-size:18px;font-weight:800;padding:12px 22px;border-radius:30px;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.3)}
 .back-fab:hover{background:rgba(35,46,68,1)}
 
 /* 소제목(언어/이명) — 작게 */
-.page-title{font-size:clamp(18px,2vw,24px);margin:0 4px;text-align:center}
+.page-title{font-size:clamp(31px,3.4vw,41px);margin:0 4px;text-align:center}
 .page-title span{font-size:.7em;color:var(--muted);font-weight:500}
 
 /* 순음청력 2분할 — 크게 */
@@ -68,7 +68,7 @@ body{
 .chart-wrap{position:relative;padding:0;line-height:0}
 .chart-wrap canvas{width:100%;height:auto;display:block}
 .ovl{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.normal-badge{position:absolute;left:56%;top:12%;background:var(--green);color:#fff;font-size:clamp(14px,1.5vw,19px);font-weight:700;padding:7px 14px;border-radius:9px;box-shadow:0 2px 6px rgba(0,0,0,.18);white-space:nowrap;z-index:2}
+.normal-badge{position:absolute;left:52%;top:11%;background:var(--green);color:#fff;font-size:clamp(21px,2.25vw,29px);font-weight:700;padding:7px 14px;border-radius:9px;box-shadow:0 2px 6px rgba(0,0,0,.18);white-space:nowrap;z-index:2}
 
 /* 오버레이 그룹 표시 제어 (data-sub) */
 .ovl .g-normal,.ovl .g-zones,.ovl .g-banana{display:none}
