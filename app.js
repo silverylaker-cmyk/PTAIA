@@ -140,6 +140,38 @@ fileInput.addEventListener("change", (e) => { if (e.target.files[0]) handleFile(
 dropZone.addEventListener("drop", (e) => { const f = e.dataTransfer.files[0]; if (f) handleFile(f); });
 dropZone.addEventListener("click", () => fileInput.click());
 
+/* ---------- 새소리 합성 ---------- */
+function playBirdSound() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const master = ctx.createGain();
+  master.gain.value = 0.35;
+  master.connect(ctx.destination);
+  // 5초 동안 자연스러운 새소리 패턴 (짧은 chirp 반복)
+  const chirps = [
+    [0.00, 4200, 5800, 0.10], [0.15, 4600, 6100, 0.08], [0.30, 5000, 4200, 0.11],
+    [0.60, 3900, 5400, 0.10], [0.75, 4800, 6000, 0.08], [0.90, 5200, 4600, 0.09],
+    [1.20, 4000, 5600, 0.11], [1.40, 4600, 6200, 0.08], [1.60, 5000, 4000, 0.10],
+    [2.00, 4200, 5800, 0.10], [2.15, 4600, 6100, 0.08], [2.30, 5000, 4200, 0.11],
+    [2.70, 3800, 5200, 0.12], [2.90, 4400, 6000, 0.09], [3.10, 5600, 4400, 0.08],
+    [3.50, 4000, 5600, 0.11], [3.70, 4800, 6200, 0.09], [3.90, 5200, 4000, 0.10],
+    [4.30, 4200, 5800, 0.10], [4.50, 4600, 6100, 0.08], [4.70, 5000, 4400, 0.09],
+  ];
+  for (const [t, f1, f2, dur] of chirps) {
+    const osc = ctx.createOscillator();
+    const gn = ctx.createGain();
+    osc.type = "sine";
+    osc.connect(gn); gn.connect(master);
+    const now = ctx.currentTime + t;
+    osc.frequency.setValueAtTime(f1, now);
+    osc.frequency.exponentialRampToValueAtTime(f2, now + dur);
+    gn.gain.setValueAtTime(0, now);
+    gn.gain.linearRampToValueAtTime(0.9, now + 0.01);
+    gn.gain.setValueAtTime(0.9, now + dur - 0.02);
+    gn.gain.linearRampToValueAtTime(0, now + dur);
+    osc.start(now); osc.stop(now + dur + 0.02);
+  }
+}
+
 /* ---------- 소리 듣기 ---------- */
 const player = $("player");
 $("audioFab").addEventListener("click", (e) => {
@@ -256,7 +288,7 @@ function renderStatic(pageCanvas) {
 /* ---------- OCR 이후 ---------- */
 async function renderOcr(pageCanvas) {
   const worker = await getWorker();
-  const ptaOpts = { max: 119, whitelist: "0123456789d. " };
+  const ptaOpts = { max: 120, whitelist: "0123456789d. " };
   const rDb = await ocrNumber(worker, pageCanvas, PTA_OCR.right, ptaOpts);
   const lDb = await ocrNumber(worker, pageCanvas, PTA_OCR.left, ptaOpts);
   applyPta("right", rDb);
@@ -373,6 +405,7 @@ function buildAudioOverlay(ear, wrap) {
     ["z", 250, 30], ["v", 320, 30],
     ["p", 1400, 27], ["h", 1500, 33], ["g", 1680, 37],
     ["k", 3000, 30], ["f", 4400, 28], ["s", 5200, 29], ["th", 6000, 28],
+    ["ㅅ", 4400, 36], ["ㅈ", 5200, 37], ["ㅆ", 6000, 36],
     ["J", 250, 42], ["m", 330, 41], ["d", 400, 41], ["b", 470, 41],
     ["ch", 1450, 42], ["sh", 1950, 42],
     ["n", 320, 46], ["ng", 345, 50],
@@ -391,13 +424,18 @@ function buildAudioOverlay(ear, wrap) {
   const imgs = [
     { emo: "🐶", db: 70, fx: 0.32 },
     { emo: "🎹", db: 80, fx: 0.52 },
-    { emo: "🚗", db: 97, fx: 0.74 },
+    { emo: "🚗", db: 97, hz: 500 },
+    { emo: "🐦", db: 5, hz: 6000, bird: true },
   ];
   for (const it of imgs) {
     const el = document.createElement("div");
-    el.className = "snd-img";
+    el.className = "snd-img" + (it.bird ? " bird-btn no-advance" : "");
     el.textContent = it.emo;
-    pos(el, g.xL + it.fx * W, g.yf(it.db));
+    const x = it.hz != null ? g.xf(it.hz) : g.xL + it.fx * W;
+    pos(el, x, g.yf(it.db));
+    if (it.bird) {
+      el.addEventListener("click", (e) => { e.stopPropagation(); playBirdSound(); });
+    }
     wrap.appendChild(el);
   }
   function pos(el, fx, fy) {
