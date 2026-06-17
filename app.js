@@ -13,9 +13,10 @@ const REGION = {
 };
 
 // 평균 dB 숫자 위치(페이지 비율)
+// 왼쪽 박스는 세 자리 수(100 이상)의 백의 자리가 잘리지 않도록 왼쪽으로 더 넓힘
 const PTA_OCR = {
   right: [0.150, 0.1505, 0.207, 0.1596],
-  left:  [0.826, 0.1495, 0.902, 0.1600],
+  left:  [0.818, 0.1495, 0.902, 0.1600],
 };
 
 // 좌우 동일 크기 오디오그램 표시 영역
@@ -37,10 +38,15 @@ const AUDIO_CAL = {
 };
 
 // 이명표 셀(페이지 비율) — Rt/Lt 의 Pitch(Hz), Loudness(dB)
+// 칸 경계선(세로선)이 "1"로 오인식되던 문제 때문에, 박스를 넉넉히 잡고
+// 전처리(removeTableLines)에서 표의 칸 선을 지워 숫자만 남도록 한다.
 const TINNITO_CELLS = {
-  right: { pitch: [0.2385, 0.900, 0.363, 0.917], loud: [0.369, 0.900, 0.493, 0.917] },
-  left:  { pitch: [0.2385, 0.921, 0.363, 0.937], loud: [0.369, 0.921, 0.493, 0.937] },
+  right: { pitch: [0.244, 0.899, 0.364, 0.919], loud: [0.372, 0.899, 0.493, 0.919] },
+  left:  { pitch: [0.244, 0.920, 0.364, 0.940], loud: [0.372, 0.920, 0.493, 0.940] },
 };
+
+// 이명 Pitch는 항상 표준 청력검사 주파수 중 하나 → 가까운 값으로 보정(스냅)
+const TINNITUS_FREQS = [125, 250, 500, 750, 1000, 1500, 2000, 3000, 4000, 6000, 8000];
 
 const RENDER_SCALE = 3.2;
 
@@ -258,12 +264,20 @@ async function renderOcr(pageCanvas) {
 
   const tin = {};
   for (const side of ["right", "left"]) {
-    const pitch = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].pitch);
-    const loud = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].loud, { max: 130 });
-    tin[side] = { pitch, loud };
+    const pitchRaw = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].pitch, { stripLines: true });
+    const loud = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].loud, { max: 120, stripLines: true });
+    tin[side] = { pitch: snapPitch(pitchRaw), loud };
   }
   renderTinnitus(pageCanvas, tin);
   applyState(state); // 콜아웃 표시 상태 동기화
+}
+
+// OCR로 읽은 Pitch를 가장 가까운 표준 주파수로 보정. 범위를 벗어나면 무시(null).
+function snapPitch(n) {
+  if (n == null || n < 80 || n > 9000) return null;
+  let best = TINNITUS_FREQS[0];
+  for (const f of TINNITUS_FREQS) if (Math.abs(f - n) < Math.abs(best - n)) best = f;
+  return best;
 }
 
 // (테스트/시연용) 양쪽 이명 케이스 미리보기
@@ -394,8 +408,8 @@ function buildAudioOverlay(ear, wrap) {
 
 /* ---------- OCR 숫자 ---------- */
 async function ocrNumber(worker, src, region, opts = {}) {
-  const { max = null, whitelist = "0123456789" } = opts;
-  const pre = preprocess(src, region);
+  const { max = null, whitelist = "0123456789", stripLines = false } = opts;
+  const pre = preprocess(src, region, 4, 30, stripLines);
   if (pre.inkRatio < 0.004) return null;
   await worker.setParameters({ tessedit_char_whitelist: whitelist });
   const { data } = await worker.recognize(pre.canvas);
@@ -415,34 +429,74 @@ async function ocrNumber(worker, src, region, opts = {}) {
   }
   return n;
 }
-function preprocess(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30) {
+function preprocess(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30, stripLines = false) {
   const sx = nx0 * src.width, sy = ny0 * src.height;
   const sw = (nx1 - nx0) * src.width, sh = (ny1 - ny0) * src.height;
   const dw = Math.round(sw * zoom), dh = Math.round(sh * zoom);
+
+  // 1) 잘라낸 영역을 딱 맞는 캔버스에 그려 그레이스케일 처리
+  const tight = document.createElement("canvas");
+  tight.width = dw; tight.height = dh;
+  const tctx = tight.getContext("2d");
+  tctx.imageSmoothingEnabled = true; tctx.imageSmoothingQuality = "high";
+  tctx.drawImage(src, sx, sy, sw, sh, 0, 0, dw, dh);
+  const timg = tctx.getImageData(0, 0, dw, dh);
+  const td = timg.data;
+  for (let i = 0; i < td.length; i += 4) {
+    const gg = 0.299 * td[i] + 0.587 * td[i + 1] + 0.114 * td[i + 2];
+    td[i] = td[i + 1] = td[i + 2] = gg;
+  }
+  // 표의 칸 경계선(세로/가로 선)을 지워 "1" 오인식·숫자 누락 방지
+  if (stripLines) removeTableLines(td, dw, dh);
+  tctx.putImageData(timg, 0, 0);
+
+  // 2) 여백(pad)을 둔 흰 캔버스에 합성
   const c = document.createElement("canvas");
   c.width = dw + pad * 2; c.height = dh + pad * 2;
   const ctx = c.getContext("2d");
   ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
-  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(src, sx, sy, sw, sh, pad, pad, dw, dh);
+  ctx.drawImage(tight, pad, pad);
   const img = ctx.getImageData(0, 0, c.width, c.height);
   const d = img.data;
   let ink = 0;
-  for (let i = 0; i < d.length; i += 4) {
-    const gg = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-    if (gg < 130) ink++;
-    d[i] = d[i + 1] = d[i + 2] = gg;
-  }
-  ctx.putImageData(img, 0, 0);
+  for (let i = 0; i < d.length; i += 4) if (d[i] < 130) ink++;
   return { canvas: c, inkRatio: ink / (c.width * c.height) };
+}
+
+// 표의 칸 경계선(셀을 가득 채우는 검은 세로/가로 선)을 흰색으로 지운다.
+// 숫자는 위·아래(또는 좌·우) 끝에 여백이 있어 보존되고, 칸 선만 제거된다.
+function removeTableLines(data, w, h) {
+  const dark = (x, y) => data[(y * w + x) * 4] < 150;
+  // 세로선: 맨 위·맨 아래 픽셀이 모두 검고, 세로로 85% 이상 채워진 열
+  for (let x = 0; x < w; x++) {
+    if (!dark(x, 0) || !dark(x, h - 1)) continue;
+    let cnt = 0;
+    for (let y = 0; y < h; y++) if (dark(x, y)) cnt++;
+    if (cnt >= 0.85 * h) {
+      for (let y = 0; y < h; y++) {
+        const i = (y * w + x) * 4; data[i] = data[i + 1] = data[i + 2] = 255;
+      }
+    }
+  }
+  // 가로선: 맨 왼쪽·맨 오른쪽 픽셀이 모두 검고, 가로로 85% 이상 채워진 행
+  for (let y = 0; y < h; y++) {
+    if (!dark(0, y) || !dark(w - 1, y)) continue;
+    let cnt = 0;
+    for (let x = 0; x < w; x++) if (dark(x, y)) cnt++;
+    if (cnt >= 0.85 * w) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4; data[i] = data[i + 1] = data[i + 2] = 255;
+      }
+    }
+  }
 }
 
 /* ---------- 이명검사 ---------- */
 function renderTinnitus(pageCanvas, tin) {
   const pageEl = $("tinnitusPage");
   pageEl.innerHTML = "";
-  // Pitch 수치가 있는 쪽 = 이명이 있는 쪽
-  const sides = ["right", "left"].filter((s) => tin[s].pitch != null);
+  // Pitch·Loudness 둘 다 인식된 쪽 = 이명이 있는 쪽 (한쪽만 읽히면 마커를 못 찍으므로 제외)
+  const sides = ["right", "left"].filter((s) => tin[s].pitch != null && tin[s].loud != null);
 
   const title = (cls) => {
     const h = document.createElement("h2");
