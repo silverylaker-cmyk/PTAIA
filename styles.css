@@ -60,7 +60,7 @@ body{
 .ear-label{font-size:clamp(24px,2.6vw,40px);font-weight:900;line-height:1}
 .ear-en{font-size:clamp(12px,1.2vw,15px);font-weight:700;opacity:.85;letter-spacing:1px}
 .pta-box{margin-left:auto;display:flex;align-items:center;gap:12px}
-.signal{width:clamp(20px,2.1vw,28px);height:clamp(20px,2.1vw,28px);border-radius:50%;flex:0 0 auto;box-shadow:0 0 0 3px rgba(255,255,255,.35),0 2px 5px rgba(0,0,0,.3);background:#bbb}
+.signal{width:clamp(20px,2.1vw,28px);height:clamp(20px,2.1vw,28px);border-radius:50%;flex:0 0 auto;border:2px solid #222;box-shadow:0 0 0 3px rgba(255,255,255,.35),0 2px 5px rgba(0,0,0,.3);background:#bbb}
 .pta-val{font-size:clamp(28px,3.2vw,46px);font-weight:900;line-height:1;display:flex;align-items:center}
 .pta-val canvas{height:clamp(26px,2.8vw,40px);width:auto;background:#fff;border-radius:6px;padding:2px 8px}
 
@@ -68,7 +68,7 @@ body{
 .chart-wrap{position:relative;padding:0;line-height:0}
 .chart-wrap canvas{width:100%;height:auto;display:block}
 .ovl{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.normal-badge{position:absolute;left:50%;top:11%;transform:translateX(-50%);background:var(--green);color:#fff;font-size:clamp(21px,2.25vw,29px);font-weight:700;padding:14px 16px;border-radius:9px;box-shadow:0 2px 6px rgba(0,0,0,.18);white-space:nowrap;z-index:2}
+.normal-badge{position:absolute;left:50%;top:6%;transform:translateX(-50%);background:var(--green);color:#fff;font-size:clamp(21px,2.25vw,29px);font-weight:700;padding:14px 16px;border-radius:9px;box-shadow:0 2px 6px rgba(0,0,0,.18);white-space:nowrap;z-index:2}
 /* 좌우 그래프 사이 "말소리 영역" 라벨 (35dB 부근, 오버랩 허용) */
 .speech-zone-label{position:absolute;transform:translate(-50%,-50%);z-index:5;font-weight:800;font-size:clamp(18px,2vw,27px);color:#5a4500;background:rgba(245,212,70,.92);padding:8px 14px;border-radius:8px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.22)}
 

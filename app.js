@@ -256,7 +256,7 @@ function renderStatic(pageCanvas) {
 /* ---------- OCR 이후 ---------- */
 async function renderOcr(pageCanvas) {
   const worker = await getWorker();
-  const ptaOpts = { max: 119, whitelist: "0123456789d. " };
+  const ptaOpts = { max: 120, whitelist: "0123456789d. " };
   const rDb = await ocrNumber(worker, pageCanvas, PTA_OCR.right, ptaOpts);
   const lDb = await ocrNumber(worker, pageCanvas, PTA_OCR.left, ptaOpts);
   applyPta("right", rDb);
@@ -373,6 +373,7 @@ function buildAudioOverlay(ear, wrap) {
     ["z", 250, 30], ["v", 320, 30],
     ["p", 1400, 27], ["h", 1500, 33], ["g", 1680, 37],
     ["k", 3000, 30], ["f", 4400, 28], ["s", 5200, 29], ["th", 6000, 28],
+    ["ㅅ", 4400, 36], ["ㅈ", 5200, 37], ["ㅆ", 6000, 36],
     ["J", 250, 42], ["m", 330, 41], ["d", 400, 41], ["b", 470, 41],
     ["ch", 1450, 42], ["sh", 1950, 42],
     ["n", 320, 46], ["ng", 345, 50],
@@ -391,18 +392,65 @@ function buildAudioOverlay(ear, wrap) {
   const imgs = [
     { emo: "🐶", db: 70, fx: 0.32 },
     { emo: "🎹", db: 80, fx: 0.52 },
-    { emo: "🚗", db: 97, fx: 0.74 },
+    { emo: "🚗", db: 97, hz: 500 },
+    { emo: "🐦", db: 5, hz: 6000, bird: true },
   ];
   for (const it of imgs) {
     const el = document.createElement("div");
     el.className = "snd-img";
     el.textContent = it.emo;
-    pos(el, g.xL + it.fx * W, g.yf(it.db));
+    const x = "hz" in it ? g.xf(it.hz) : g.xL + it.fx * W;
+    pos(el, x, g.yf(it.db));
+    if (it.bird) {
+      el.classList.add("no-advance");
+      el.style.cursor = "pointer";
+      el.addEventListener("click", (e) => { e.stopPropagation(); playBirdSound(); });
+    }
     wrap.appendChild(el);
   }
   function pos(el, fx, fy) {
     el.style.left = (fx * 100).toFixed(2) + "%";
     el.style.top = (fy * 100).toFixed(2) + "%";
+  }
+}
+
+/* ---------- 새소리 합성 (Web Audio API) ---------- */
+function playBirdSound() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return;
+  const ctx = new AudioCtx();
+  const t0 = ctx.currentTime;
+  // [시작(s), 시작주파수(Hz), 최고주파수(Hz), 지속(s)]
+  const notes = [
+    [0.00, 3500, 4200, 0.07], [0.10, 3800, 4600, 0.06],
+    [0.30, 3200, 4000, 0.08], [0.42, 3500, 4300, 0.07],
+    [0.70, 3800, 4800, 0.06], [0.80, 3500, 4200, 0.07],
+    [1.05, 3200, 4000, 0.09], [1.18, 3600, 4400, 0.07],
+    [1.40, 3800, 4600, 0.06], [1.55, 3500, 4300, 0.07],
+    [1.80, 3200, 4000, 0.08], [2.00, 3500, 4200, 0.07],
+    [2.20, 3800, 4600, 0.06], [2.35, 3500, 4300, 0.07],
+    [2.60, 3200, 4000, 0.09], [2.80, 3600, 4400, 0.07],
+    [3.00, 3800, 4800, 0.06], [3.15, 3500, 4200, 0.07],
+    [3.40, 3200, 4000, 0.08], [3.60, 3500, 4300, 0.07],
+    [3.85, 3800, 4600, 0.06], [4.00, 3200, 4000, 0.09],
+    [4.20, 3600, 4400, 0.07], [4.45, 3800, 4600, 0.06],
+    [4.65, 3500, 4200, 0.07], [4.80, 3200, 4000, 0.08],
+  ];
+  for (const [tOff, fLo, fHi, dur] of notes) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(fLo, t0 + tOff);
+    osc.frequency.linearRampToValueAtTime(fHi, t0 + tOff + dur * 0.5);
+    osc.frequency.linearRampToValueAtTime(fLo, t0 + tOff + dur);
+    gain.gain.setValueAtTime(0, t0 + tOff);
+    gain.gain.linearRampToValueAtTime(0.22, t0 + tOff + 0.008);
+    gain.gain.setValueAtTime(0.22, t0 + tOff + dur - 0.01);
+    gain.gain.linearRampToValueAtTime(0, t0 + tOff + dur);
+    osc.start(t0 + tOff);
+    osc.stop(t0 + tOff + dur + 0.01);
   }
 }
 
