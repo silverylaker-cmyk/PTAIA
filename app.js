@@ -367,6 +367,15 @@ function buildAudioOverlay(ear, wrap) {
 
   wrap.appendChild(svg);
 
+  // 저음/고음 방향 라벨 (빨간 테두리 슬라이드, 110dB 선에 배치)
+  const freqLabel = document.createElement("div");
+  freqLabel.className = "freq-label";
+  freqLabel.style.top = (g.yf(110) * 100).toFixed(2) + "%";
+  freqLabel.style.left = (g.xL * 100).toFixed(2) + "%";
+  freqLabel.style.right = ((1 - g.xR) * 100).toFixed(2) + "%";
+  freqLabel.innerHTML = "<span>&#x3C; 저음</span><span>고음 &#x3E;</span>";
+  wrap.appendChild(freqLabel);
+
   // 음소 알파벳 + 소리 그림 — HTML 오버레이
   // 음소 알파벳 (Cochlear 차트 위치 기준 Hz·dB)
   const PHONEMES = [
