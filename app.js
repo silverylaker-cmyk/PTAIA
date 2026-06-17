@@ -41,8 +41,8 @@ const AUDIO_CAL = {
 // 칸 경계선(세로선)이 "1"로 오인식되던 문제 때문에, 박스를 넉넉히 잡고
 // 전처리(removeTableLines)에서 표의 칸 선을 지워 숫자만 남도록 한다.
 const TINNITO_CELLS = {
-  right: { pitch: [0.244, 0.899, 0.364, 0.919], loud: [0.372, 0.899, 0.493, 0.919] },
-  left:  { pitch: [0.244, 0.920, 0.364, 0.940], loud: [0.372, 0.920, 0.493, 0.940] },
+  right: { pitch: [0.244, 0.899, 0.364, 0.913], loud: [0.372, 0.899, 0.493, 0.913] },
+  left:  { pitch: [0.244, 0.916, 0.364, 0.933], loud: [0.372, 0.916, 0.493, 0.933] },
 };
 
 // 이명 Pitch는 항상 표준 청력검사 주파수 중 하나 → 가까운 값으로 보정(스냅)
@@ -264,7 +264,7 @@ async function renderOcr(pageCanvas) {
 
   const tin = {};
   for (const side of ["right", "left"]) {
-    const pitchRaw = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].pitch, { stripLines: true });
+    const pitchRaw = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].pitch, { stripLines: true, checkEight: true });
     const loud = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].loud, { max: 120, stripLines: true });
     tin[side] = { pitch: snapPitch(pitchRaw), loud };
   }
@@ -408,7 +408,7 @@ function buildAudioOverlay(ear, wrap) {
 
 /* ---------- OCR 숫자 ---------- */
 async function ocrNumber(worker, src, region, opts = {}) {
-  const { max = null, whitelist = "0123456789", stripLines = false } = opts;
+  const { max = null, whitelist = "0123456789", stripLines = false, checkEight = false } = opts;
   const pre = preprocess(src, region, 4, 30, stripLines);
   if (pre.inkRatio < 0.004) return null;
   await worker.setParameters({ tessedit_char_whitelist: whitelist });
@@ -419,6 +419,12 @@ async function ocrNumber(worker, src, region, opts = {}) {
   let digits = m[0];
   let n = parseInt(digits, 10);
   if (!Number.isFinite(n)) return null;
+  // "8"이 "3"으로 오인식되는 경우 보정: 4자리 수 중 첫 자리가 "3"이면 캔버스의
+  // 첫 글자 좌측-중앙에 잉크가 있는지 확인 — "8"은 닫힌 허리가 있어 잉크가 있고,
+  // "3"은 왼쪽이 열려 있어 잉크가 없다.
+  if (checkEight && /^3\d{3}$/.test(digits)) {
+    if (detectFirstDigitIsEight(pre.canvas)) n = 8000 + (n - 3000);
+  }
   if (max != null) {
     // OCR이 끝에 0을 덧붙이는 오류 보정 (예: 16 -> 160)
     while (n > max && digits.length > 1 && digits.endsWith("0")) {
@@ -428,6 +434,47 @@ async function ocrNumber(worker, src, region, opts = {}) {
     if (n > max) return null;
   }
   return n;
+}
+
+// "8"과 "3"을 픽셀로 구분: 첫 글자의 좌측 중앙에 잉크가 있으면 "8", 없으면 "3".
+// "8"은 양 고리가 닫혀 허리 위치에서 좌측 획이 이어지고,
+// "3"은 왼쪽이 열려 중앙-좌측에 잉크가 없다.
+function detectFirstDigitIsEight(canvas) {
+  const ctx = canvas.getContext("2d");
+  const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const isDark = (x, y) => data[(y * width + x) * 4] < 130;
+
+  let leftCol = -1;
+  outer: for (let x = 0; x < width; x++) {
+    for (let y = 0; y < height; y++) {
+      if (isDark(x, y)) { leftCol = x; break outer; }
+    }
+  }
+  if (leftCol < 0) return false;
+
+  // 첫 글자의 세로 범위(= 잉크가 있는 행) 탐색 — 좌측 80열 이내만 확인
+  const scanRight = Math.min(leftCol + 80, width);
+  let charTop = -1, charBottom = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = leftCol; x < scanRight; x++) {
+      if (isDark(x, y)) {
+        if (charTop < 0) charTop = y;
+        charBottom = y;
+        break;
+      }
+    }
+  }
+  if (charTop < 0) return false;
+
+  // 세로 중앙 ±8px 범위에서 좌측 12열 안에 잉크가 있으면 "8"
+  const center = (charTop + charBottom) >> 1;
+  for (let y = center - 8; y <= center + 8; y++) {
+    if (y < 0 || y >= height) continue;
+    for (let x = leftCol; x < leftCol + 12; x++) {
+      if (isDark(x, y)) return true;
+    }
+  }
+  return false;
 }
 function preprocess(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30, stripLines = false) {
   const sx = nx0 * src.width, sy = ny0 * src.height;
