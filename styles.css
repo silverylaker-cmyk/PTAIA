@@ -86,7 +86,7 @@ body{
 [data-sub="3"] .phoneme{display:block}
 
 /* 저음/고음 방향 라벨 */
-.freq-label{position:absolute;justify-content:space-between;align-items:center;transform:translateY(-50%);color:#222;font-weight:800;font-size:clamp(14px,1.5vw,20px);pointer-events:none;z-index:3}
+.freq-label{position:absolute;justify-content:space-between;align-items:center;transform:translateY(-50%);color:#222;font-weight:900;font-size:clamp(28px,3vw,40px);pointer-events:none;z-index:3}
 
 /* 소리 그림 / 라벨 / 음소 */
 .snd-img{position:absolute;transform:translate(-50%,-55%);font-size:clamp(34px,3.6vw,54px);z-index:3;align-items:center;justify-content:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))}

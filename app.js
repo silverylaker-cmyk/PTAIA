@@ -370,7 +370,7 @@ function buildAudioOverlay(ear, wrap) {
   // 저음/고음 방향 라벨 (빨간 테두리 슬라이드, 110dB 선에 배치)
   const freqLabel = document.createElement("div");
   freqLabel.className = "freq-label";
-  freqLabel.style.top = (g.yf(110) * 100).toFixed(2) + "%";
+  freqLabel.style.top = (g.yf(100) * 100).toFixed(2) + "%";
   freqLabel.style.left = (g.xL * 100).toFixed(2) + "%";
   freqLabel.style.right = ((1 - g.xR) * 100).toFixed(2) + "%";
   freqLabel.innerHTML = "<span>&#x3C; 저음</span><span>고음 &#x3E;</span>";
