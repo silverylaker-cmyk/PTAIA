@@ -654,8 +654,8 @@ function preprocess(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30) {
 function renderTinnitus(pageCanvas, tin) {
   const pageEl = $("tinnitusPage");
   pageEl.innerHTML = "";
-  // Pitch·Loudness 둘 다 인식된 쪽 = 이명이 있는 쪽 (한쪽만 읽히면 마커를 못 찍으므로 제외)
-  const sides = ["right", "left"].filter((s) => tin[s].pitch != null && tin[s].loud != null);
+  // Pitch가 인식된 쪽 = 표시 대상 (loud 없으면 세로선만)
+  const sides = ["right", "left"].filter((s) => tin[s].pitch != null);
 
   const title = (cls) => {
     const h = document.createElement("h2");
@@ -722,21 +722,65 @@ function buildTinnitusAudiogram(pageCanvas, side, pitch, loud) {
   wrap.className = "chart-wrap";
   wrap.appendChild(crop(pageCanvas, AUDIO_DISPLAY[side]));
 
-  if (pitch != null && loud != null) {
+  if (pitch != null) {
     const g = geom(side);
-    const fx = g.xf(pitch), fy = g.yf(loud);
-    const marker = document.createElement("span");
-    marker.className = "tin-marker";
-    marker.style.left = (fx * 100).toFixed(2) + "%";
-    marker.style.top = (fy * 100).toFixed(2) + "%";
-    wrap.appendChild(marker);
+    const fx = g.xf(pitch);
 
-    const callout = document.createElement("span");
-    callout.className = "tin-callout";
-    callout.textContent = `이명 ${pitch}Hz · ${loud}dB`;
-    callout.style.left = (fx * 100).toFixed(2) + "%";
-    callout.style.top = "calc(" + (fy * 100).toFixed(2) + "% - 22px)"; // 동그라미 위로 띄움
-    wrap.appendChild(callout);
+    if (loud != null) {
+      // 이명 위치 동그라미 마커
+      const fy = g.yf(loud);
+      const marker = document.createElement("span");
+      marker.className = "tin-marker";
+      marker.style.left = (fx * 100).toFixed(2) + "%";
+      marker.style.top = (fy * 100).toFixed(2) + "%";
+      wrap.appendChild(marker);
+
+      // 콜아웃: 우측 가장자리 근처면 오른쪽 정렬, 좌측이면 왼쪽 정렬, 중간이면 가운데
+      const callout = document.createElement("span");
+      callout.className = "tin-callout";
+      callout.textContent = `이명 ${pitch}Hz · ${loud}dB`;
+      callout.style.top = "calc(" + (fy * 100).toFixed(2) + "% - 22px)";
+      if (fx > 0.65) {
+        callout.style.right = ((1 - fx) * 100).toFixed(2) + "%";
+        callout.style.transform = "translateY(-100%)";
+      } else if (fx < 0.2) {
+        callout.style.left = (fx * 100).toFixed(2) + "%";
+        callout.style.transform = "translateY(-100%)";
+      } else {
+        callout.style.left = (fx * 100).toFixed(2) + "%";
+        callout.style.transform = "translate(-50%,-100%)";
+      }
+      wrap.appendChild(callout);
+    } else {
+      // loudness 없음: 해당 Hz에 굵은 세로선 + Hz 숫자 레이블만
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 100 100");
+      svg.setAttribute("preserveAspectRatio", "none");
+      svg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3";
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      const lx = (fx * 100).toFixed(2);
+      line.setAttribute("x1", lx); line.setAttribute("y1", "0");
+      line.setAttribute("x2", lx); line.setAttribute("y2", "100");
+      line.setAttribute("stroke", "#222"); line.setAttribute("stroke-width", "1.5");
+      svg.appendChild(line);
+      wrap.appendChild(svg);
+
+      const callout = document.createElement("span");
+      callout.className = "tin-callout";
+      callout.textContent = `${pitch}Hz`;
+      callout.style.top = "4%";
+      if (fx > 0.65) {
+        callout.style.right = ((1 - fx) * 100).toFixed(2) + "%";
+        callout.style.transform = "none";
+      } else if (fx < 0.2) {
+        callout.style.left = (fx * 100).toFixed(2) + "%";
+        callout.style.transform = "none";
+      } else {
+        callout.style.left = (fx * 100).toFixed(2) + "%";
+        callout.style.transform = "translateX(-50%)";
+      }
+      wrap.appendChild(callout);
+    }
   }
   panel.appendChild(wrap);
   return panel;
