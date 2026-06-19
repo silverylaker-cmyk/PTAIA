@@ -40,7 +40,7 @@ const AUDIO_CAL = {
 // 이명표 칸의 가로 위치(열). 세로 구분선(0.236/0.367/0.496) "안쪽"으로 잡아
 // 경계선이 "1"로 읽히는 것을 막는다. 세로 위치(행)는 detectTinnitusRows로
 // 동적으로 잡으므로(PDF마다 몇 px씩 달라짐 보정), 여기서는 x만 정의한다.
-const TIN_COLS = { pitch: [0.228, 0.366], loud: [0.355, 0.496] };
+const TIN_COLS = { pitch: [0.2385, 0.366], loud: [0.355, 0.496] };
 
 // 행 동적 검출이 실패할 때만 쓰는 고정 좌표(폴백)
 const TINNITO_CELLS = {
@@ -580,6 +580,12 @@ function preprocessCell(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30, autocrop 
     let cnt = 0;
     for (let x = 0; x < dw; x++) if (a[(y * dw + x) * 4] < 150) cnt++;
     if (cnt >= 0.80 * dw) for (let x = 0; x < dw; x++) { const i = (y * dw + x) * 4; a[i] = a[i + 1] = a[i + 2] = 255; }
+  }
+  // 세로 칸선(셀 높이의 80% 이상 검은 열) 제거 — 숫자 획은 셀 높이를 가득 채우지 않아 안전
+  for (let x = 0; x < dw; x++) {
+    let cnt = 0;
+    for (let y = 0; y < dh; y++) if (a[(y * dw + x) * 4] < 150) cnt++;
+    if (cnt >= 0.80 * dh) for (let y = 0; y < dh; y++) { const i = (y * dw + x) * 4; a[i] = a[i + 1] = a[i + 2] = 255; }
   }
   // autocrop 없이 셀 전체를 그대로 사용(autocrop이 칸선과 숫자를 바짝 붙여
   // 판독에 실패하는 PDF 대비 fallback). line-removed 캔버스를 pad만 둘러 반환.
