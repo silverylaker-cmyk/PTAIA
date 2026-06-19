@@ -333,26 +333,25 @@ function parsePitch(text) {
 
 // 이명 Loudness는 15~100뿐이라는 점을 이용해 재평가한다.
 //  1) 15~100면 그대로
-//  2) 끝자리 0 덧붙음 보정 (750→75, 1500→15)
-//  3) 100 초과(앞에 경계선 "1" 등 한 자리가 덧붙은 경우): 맨 앞자리를 떼어
-//     15~100면 그 값(175→75, 118→18). 떼어도 범위 밖이면 원래 값을 그대로
-//     출력해 사람이 눈으로 확인하게 둔다.
+//  2) 맨 앞자리가 "1"이고 100 초과: 앞자리 제거 후 15~100이면 반환 (150→50, 175→75, 118→18)
+//     경계선이 "1"로 붙는 OCR 오류 대응. 범위 밖이면 원래 값을 그대로 출력.
+//  3) 끝자리 0 덧붙음 보정 (750→75) — 앞자리가 1이 아닌 경우
 function parseLoud(text) {
   const s = (text || "").replace(/\D/g, "");
   if (!s) return null;
   const n = parseInt(s, 10);
   if (!Number.isFinite(n)) return null;
   if (n >= 15 && n <= 100) return n;                                     // 1)
-  let t = s;                                                             // 2) 끝자리 0 보정
+  if (s[0] === "1" && n > 100) {                                         // 2) 앞자리 "1" 제거
+    const stripped = parseInt(s.slice(1), 10);
+    if (stripped >= 15 && stripped <= 100) return stripped;             //    150→50, 175→75
+    return n;                                                           //    범위 밖이면 원래 값
+  }
+  let t = s;                                                             // 3) 끝자리 0 보정
   while (t.length > 2 && t.endsWith("0")) {
     t = t.slice(0, -1);
     const v = parseInt(t, 10);
     if (v >= 15 && v <= 100) return v;
-  }
-  if (n >= 100 && s.length >= 3) {                                       // 3) 맨 앞자리 제거
-    const stripped = parseInt(s.slice(1), 10);
-    if (stripped >= 15 && stripped <= 100) return stripped;             //    175→75, 118→18
-    return n;                                                           //    범위 밖이면 원래 값
   }
   return null;
 }
