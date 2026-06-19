@@ -40,7 +40,7 @@ const AUDIO_CAL = {
 // 이명표 칸의 가로 위치(열). 세로 구분선(0.236/0.367/0.496) "안쪽"으로 잡아
 // 경계선이 "1"로 읽히는 것을 막는다. 세로 위치(행)는 detectTinnitusRows로
 // 동적으로 잡으므로(PDF마다 몇 px씩 달라짐 보정), 여기서는 x만 정의한다.
-const TIN_COLS = { pitch: [0.2385, 0.366], loud: [0.367, 0.496] };
+const TIN_COLS = { pitch: [0.2385, 0.366], loud: [0.355, 0.496] };
 
 // 행 동적 검출이 실패할 때만 쓰는 고정 좌표(폴백)
 const TINNITO_CELLS = {
