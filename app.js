@@ -47,8 +47,8 @@ const TINNITO_CELLS = {
   left:  { pitch: [0.2385, 0.920, 0.365, 0.937], loud: [0.368, 0.920, 0.495, 0.937] },
 };
 
-// 이명 Pitch는 항상 표준 청력검사 주파수 중 하나 → 가까운 값으로 보정(스냅)
-const TINNITUS_FREQS = [125, 250, 500, 750, 1000, 1500, 2000, 3000, 4000, 6000, 8000];
+// 이명 Pitch가 가질 수 있는 값(이 병원 양식) — OCR 결과 재평가에 사용
+const TINNITUS_PITCHES = [250, 500, 1000, 4000, 8000];
 
 const RENDER_SCALE = 3.2;
 
@@ -266,25 +266,57 @@ async function renderOcr(pageCanvas) {
 
   const tin = {};
   for (const side of ["right", "left"]) {
-    const pitchRaw = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].pitch);
-    const loud = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].loud, { max: 120 });
-    tin[side] = { pitch: snapPitch(pitchRaw), loud };
+    const pitch = parsePitch(await ocrText(worker, pageCanvas, TINNITO_CELLS[side].pitch));
+    const loud = parseLoud(await ocrText(worker, pageCanvas, TINNITO_CELLS[side].loud));
+    tin[side] = { pitch, loud };
   }
   renderTinnitus(pageCanvas, tin);
   applyState(state); // 콜아웃 표시 상태 동기화
 }
 
-// OCR로 읽은 Pitch를 가장 가까운 표준 주파수로 보정. 범위를 벗어나면 무시(null).
-function snapPitch(n) {
-  if (n == null || n < 80 || n > 9000) return null;
-  let best = TINNITUS_FREQS[0];
-  for (const f of TINNITUS_FREQS) if (Math.abs(f - n) < Math.abs(best - n)) best = f;
-  return best;
+// 이명 Pitch는 정해진 값 중 하나(250·500·1000·4000·8000)뿐이라는 점을 이용해
+// OCR 결과를 재평가한다. 경계선이 앞에 "1"로 붙는 오류가 있으므로 "뒤에서부터"
+// 유효값과 맞춰 본다(예: 18000→8000, 1500→500). 그래도 없으면 가장 가까운 값.
+function parsePitch(text) {
+  const s = (text || "").replace(/\D/g, "");
+  if (!s) return null;
+  for (const p of TINNITUS_PITCHES) if (s === String(p)) return p;       // 정확히 일치
+  let best = null;                                                        // 접미사 일치(긴 것 우선)
+  for (const p of TINNITUS_PITCHES) {
+    const ps = String(p);
+    if (s.endsWith(ps) && (best == null || ps.length > String(best).length)) best = p;
+  }
+  if (best != null) return best;
+  const n = parseInt(s, 10);                                             // 최후: 가장 가까운 값
+  if (!Number.isFinite(n)) return null;
+  let near = TINNITUS_PITCHES[0];
+  for (const p of TINNITUS_PITCHES) if (Math.abs(p - n) < Math.abs(near - n)) near = p;
+  return near;
+}
+
+// 이명 Loudness는 20~99(두 자리)뿐이라는 점을 이용해 재평가한다.
+// 앞에 경계선 "1"이 붙거나(175→75) 끝에 0이 붙는(750→75) 오류를 보정.
+function parseLoud(text) {
+  const s = (text || "").replace(/\D/g, "");
+  if (!s) return null;
+  const n = parseInt(s, 10);
+  if (Number.isFinite(n) && n >= 20 && n <= 99) return n;
+  let t = s;                                                             // 끝자리 0 덧붙음 보정
+  while (t.length > 2 && t.endsWith("0")) {
+    t = t.slice(0, -1);
+    const v = parseInt(t, 10);
+    if (v >= 20 && v <= 99) return v;
+  }
+  if (s.length >= 2) {                                                   // 앞자리 덧붙음 → 뒤 두 자리
+    const last2 = parseInt(s.slice(-2), 10);
+    if (last2 >= 20 && last2 <= 99) return last2;
+  }
+  return null;
 }
 
 // (테스트/시연용) 양쪽 이명 케이스 미리보기
 window.__demoBothTinnitus = () => {
-  renderTinnitus(lastPageCanvas, { right: { pitch: 2000, loud: 45 }, left: { pitch: 3000, loud: 30 } });
+  renderTinnitus(lastPageCanvas, { right: { pitch: 4000, loud: 45 }, left: { pitch: 8000, loud: 30 } });
   applyState(state);
 };
 
@@ -466,14 +498,19 @@ function playBirdSound() {
 }
 
 /* ---------- OCR 숫자 ---------- */
-async function ocrNumber(worker, src, region, opts = {}) {
-  const { max = null, whitelist = "0123456789" } = opts;
+// 칸을 OCR해 인식된 원본 텍스트를 그대로 돌려준다(빈 칸이면 "").
+async function ocrText(worker, src, region, whitelist = "0123456789") {
   const pre = preprocess(src, region);
-  if (pre.inkRatio < 0.004) return null;
+  if (pre.inkRatio < 0.004) return "";
   await worker.setParameters({ tessedit_char_whitelist: whitelist });
   const { data } = await worker.recognize(pre.canvas);
+  return data.text || "";
+}
+async function ocrNumber(worker, src, region, opts = {}) {
+  const { max = null, whitelist = "0123456789" } = opts;
+  const text = await ocrText(worker, src, region, whitelist);
   // 맨 앞 숫자 묶음만 사용 ("dB" 등 단위 글자는 글자로 인식돼 무시됨)
-  const m = (data.text || "").match(/\d{1,4}/);
+  const m = text.match(/\d{1,4}/);
   if (!m) return null;
   let digits = m[0];
   let n = parseInt(digits, 10);
