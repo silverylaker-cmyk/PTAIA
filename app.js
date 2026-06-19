@@ -577,6 +577,15 @@ function preprocessCell(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30) {
     for (let x = 0; x < dw; x++) if (a[(y * dw + x) * 4] < 150) cnt++;
     if (cnt >= 0.80 * dw) for (let x = 0; x < dw; x++) { const i = (y * dw + x) * 4; a[i] = a[i + 1] = a[i + 2] = 255; }
   }
+  // 세로 칸선 제거 — 칸선은 크롭 영역의 좌우 가장자리(18%)에만 나타나므로
+  // 그 영역의 칸 높이 80% 이상 검은 열만 지운다. 중앙 숫자 획(예: "1")은 보호.
+  const edge = 0.18 * dw;
+  for (let x = 0; x < dw; x++) {
+    if (x >= edge && x <= dw - edge) continue;
+    let cnt = 0;
+    for (let y = 0; y < dh; y++) if (a[(y * dw + x) * 4] < 150) cnt++;
+    if (cnt >= 0.80 * dh) for (let y = 0; y < dh; y++) { const i = (y * dw + x) * 4; a[i] = a[i + 1] = a[i + 2] = 255; }
+  }
   // 숫자 잉크의 경계 상자 찾기
   let minX = dw, minY = dh, maxX = -1, maxY = -1;
   for (let y = 0; y < dh; y++) for (let x = 0; x < dw; x++) {
