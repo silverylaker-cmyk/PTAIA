@@ -49,7 +49,7 @@ const TINNITO_CELLS = {
 };
 
 // 이명 Pitch가 가질 수 있는 값(이 병원 양식) — OCR 결과 재평가에 사용
-const TINNITUS_PITCHES = [250, 500, 1000, 2000, 3000, 4000, 6000, 8000];
+const TINNITUS_PITCHES = [250, 500, 1000, 2000, 4000, 8000];
 
 const RENDER_SCALE = 3.2;
 
@@ -311,7 +311,7 @@ function detectTinnitusRows(src) {
   return centers;
 }
 
-// 이명 Pitch는 정해진 값 중 하나(250·500·1000·2000·3000·4000·6000·8000)뿐이라는 점을 이용해
+// 이명 Pitch는 정해진 값 중 하나(250·500·1000·2000·4000·8000)뿐이라는 점을 이용해
 // OCR 결과를 재평가한다. 경계선이 앞에 "1"로 붙는 오류가 있으므로 "뒤에서부터"
 // 유효값과 맞춰 본다(예: 18000→8000, 1500→500). 그래도 없으면 가장 가까운 값.
 function parsePitch(text) {
@@ -759,8 +759,10 @@ function buildTinnitusAudiogram(pageCanvas, side, pitch, loud) {
       svg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3";
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
       const lx = (fx * 100).toFixed(2);
-      line.setAttribute("x1", lx); line.setAttribute("y1", "0");
-      line.setAttribute("x2", lx); line.setAttribute("y2", "100");
+      const ly1 = (g.yf(-10) * 100).toFixed(2);
+      const ly2 = (g.yf(120) * 100).toFixed(2);
+      line.setAttribute("x1", lx); line.setAttribute("y1", ly1);
+      line.setAttribute("x2", lx); line.setAttribute("y2", ly2);
       line.setAttribute("stroke", "#222"); line.setAttribute("stroke-width", "1.5");
       svg.appendChild(line);
       wrap.appendChild(svg);
