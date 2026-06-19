@@ -38,13 +38,13 @@ const AUDIO_CAL = {
 };
 
 // 이명표 셀(페이지 비율) — Rt/Lt 의 Pitch(Hz), Loudness(dB)
-// 칸 경계선(세로선)이 "1"로 오인식되던 문제 때문에, 박스를 넉넉히 잡고
-// 전처리(removeTableLines)에서 표의 칸 선을 지워 숫자만 남도록 한다.
-// 좌측 경계는 칸 구분선(pitch:0.236, loud:0.367) 바로 오른쪽까지 넓혀
-// 첫 자리 숫자가 잘리지 않게 한다(예: 8000→3000, 75→5 오인식 방지).
+// 칸 구분선(세로선) 위치: pitch 좌=0.236/우=0.367, loud 좌=0.367/우=0.496.
+// 셀을 "구분선 바로 안쪽"으로 잘라, 경계선은 제외하되 첫 자리 숫자는
+// 온전히 포함한다. 이렇게 하면 (1) 경계선이 "1"로 읽히지 않고
+// (2) 선 제거(strip)를 안 하므로 값이 "1"일 때 진짜 숫자를 지울 위험도 없다.
 const TINNITO_CELLS = {
-  right: { pitch: [0.237, 0.899, 0.365, 0.917], loud: [0.368, 0.899, 0.495, 0.917] },
-  left:  { pitch: [0.237, 0.920, 0.365, 0.937], loud: [0.368, 0.920, 0.495, 0.937] },
+  right: { pitch: [0.2385, 0.899, 0.365, 0.916], loud: [0.368, 0.899, 0.495, 0.916] },
+  left:  { pitch: [0.2385, 0.920, 0.365, 0.937], loud: [0.368, 0.920, 0.495, 0.937] },
 };
 
 // 이명 Pitch는 항상 표준 청력검사 주파수 중 하나 → 가까운 값으로 보정(스냅)
@@ -266,8 +266,8 @@ async function renderOcr(pageCanvas) {
 
   const tin = {};
   for (const side of ["right", "left"]) {
-    const pitchRaw = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].pitch, { stripLines: true });
-    const loud = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].loud, { max: 120, stripLines: true });
+    const pitchRaw = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].pitch);
+    const loud = await ocrNumber(worker, pageCanvas, TINNITO_CELLS[side].loud, { max: 120 });
     tin[side] = { pitch: snapPitch(pitchRaw), loud };
   }
   renderTinnitus(pageCanvas, tin);
@@ -467,8 +467,8 @@ function playBirdSound() {
 
 /* ---------- OCR 숫자 ---------- */
 async function ocrNumber(worker, src, region, opts = {}) {
-  const { max = null, whitelist = "0123456789", stripLines = false } = opts;
-  const pre = preprocess(src, region, 4, 30, stripLines);
+  const { max = null, whitelist = "0123456789" } = opts;
+  const pre = preprocess(src, region);
   if (pre.inkRatio < 0.004) return null;
   await worker.setParameters({ tessedit_char_whitelist: whitelist });
   const { data } = await worker.recognize(pre.canvas);
@@ -488,7 +488,7 @@ async function ocrNumber(worker, src, region, opts = {}) {
   }
   return n;
 }
-function preprocess(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30, stripLines = false) {
+function preprocess(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30) {
   const sx = nx0 * src.width, sy = ny0 * src.height;
   const sw = (nx1 - nx0) * src.width, sh = (ny1 - ny0) * src.height;
   const dw = Math.round(sw * zoom), dh = Math.round(sh * zoom);
@@ -505,8 +505,6 @@ function preprocess(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30, stripLines = 
     const gg = 0.299 * td[i] + 0.587 * td[i + 1] + 0.114 * td[i + 2];
     td[i] = td[i + 1] = td[i + 2] = gg;
   }
-  // 표의 칸 경계선(세로/가로 선)을 지워 "1" 오인식·숫자 누락 방지
-  if (stripLines) removeTableLines(td, dw, dh);
   tctx.putImageData(timg, 0, 0);
 
   // 2) 여백(pad)을 둔 흰 캔버스에 합성
@@ -520,34 +518,6 @@ function preprocess(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30, stripLines = 
   let ink = 0;
   for (let i = 0; i < d.length; i += 4) if (d[i] < 130) ink++;
   return { canvas: c, inkRatio: ink / (c.width * c.height) };
-}
-
-// 표의 칸 경계선(셀을 가득 채우는 검은 세로/가로 선)을 흰색으로 지운다.
-// 숫자는 위·아래(또는 좌·우) 끝에 여백이 있어 보존되고, 칸 선만 제거된다.
-function removeTableLines(data, w, h) {
-  const dark = (x, y) => data[(y * w + x) * 4] < 150;
-  // 세로선: 맨 위·맨 아래 픽셀이 모두 검고, 세로로 85% 이상 채워진 열
-  for (let x = 0; x < w; x++) {
-    if (!dark(x, 0) || !dark(x, h - 1)) continue;
-    let cnt = 0;
-    for (let y = 0; y < h; y++) if (dark(x, y)) cnt++;
-    if (cnt >= 0.85 * h) {
-      for (let y = 0; y < h; y++) {
-        const i = (y * w + x) * 4; data[i] = data[i + 1] = data[i + 2] = 255;
-      }
-    }
-  }
-  // 가로선: 맨 왼쪽·맨 오른쪽 픽셀이 모두 검고, 가로로 85% 이상 채워진 행
-  for (let y = 0; y < h; y++) {
-    if (!dark(0, y) || !dark(w - 1, y)) continue;
-    let cnt = 0;
-    for (let x = 0; x < w; x++) if (dark(x, y)) cnt++;
-    if (cnt >= 0.85 * w) {
-      for (let x = 0; x < w; x++) {
-        const i = (y * w + x) * 4; data[i] = data[i + 1] = data[i + 2] = 255;
-      }
-    }
-  }
 }
 
 /* ---------- 이명검사 ---------- */
