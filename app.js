@@ -402,7 +402,7 @@ function buildAudioOverlay(ear, wrap) {
     { emo: "🐶", db: 70, fx: 0.32 },
     { emo: "🎹", db: 80, fx: 0.52 },
     { emo: "🚗", db: 97, hz: 500 },
-    { emo: "🐦", db: 5, hz: 6000, bird: true },
+    { emo: "🦜", db: 5, hz: 6000, bird: true },
   ];
   for (const it of imgs) {
     const el = document.createElement("div");
