@@ -37,14 +37,15 @@ const AUDIO_CAL = {
   left:  { f1: 125, x1: 0.5482, f2: 8000, x2: 0.8663, d1: -10, y1: 0.1601, d2: 120, y2: 0.4060, bL: 0.5482, bR: 0.8761 },
 };
 
-// 이명표 셀(페이지 비율) — Rt/Lt 의 Pitch(Hz), Loudness(dB)
-// 칸 구분선(세로선) 위치: pitch 좌=0.236/우=0.367, loud 좌=0.367/우=0.496.
-// 셀을 "구분선 바로 안쪽"으로 잘라, 경계선은 제외하되 첫 자리 숫자는
-// 온전히 포함한다. 이렇게 하면 (1) 경계선이 "1"로 읽히지 않고
-// (2) 선 제거(strip)를 안 하므로 값이 "1"일 때 진짜 숫자를 지울 위험도 없다.
+// 이명표 칸의 가로 위치(열). 세로 구분선(0.236/0.367/0.496) "안쪽"으로 잡아
+// 경계선이 "1"로 읽히는 것을 막는다. 세로 위치(행)는 detectTinnitusRows로
+// 동적으로 잡으므로(PDF마다 몇 px씩 달라짐 보정), 여기서는 x만 정의한다.
+const TIN_COLS = { pitch: [0.2385, 0.366], loud: [0.367, 0.496] };
+
+// 행 동적 검출이 실패할 때만 쓰는 고정 좌표(폴백)
 const TINNITO_CELLS = {
-  right: { pitch: [0.2385, 0.899, 0.365, 0.916], loud: [0.368, 0.899, 0.495, 0.916] },
-  left:  { pitch: [0.2385, 0.920, 0.365, 0.937], loud: [0.368, 0.920, 0.495, 0.937] },
+  right: { pitch: [0.2385, 0.899, 0.366, 0.918], loud: [0.367, 0.899, 0.496, 0.918] },
+  left:  { pitch: [0.2385, 0.918, 0.366, 0.938], loud: [0.367, 0.918, 0.496, 0.938] },
 };
 
 // 이명 Pitch가 가질 수 있는 값(이 병원 양식) — OCR 결과 재평가에 사용
@@ -264,14 +265,50 @@ async function renderOcr(pageCanvas) {
   applyPta("right", rDb);
   applyPta("left", lDb);
 
+  // 이명표 행(Rt·Lt) 세로 위치를 가로 칸선에서 동적으로 구한다.
+  const rows = detectTinnitusRows(pageCanvas); // 칸선 ny 배열: [표상단, Rt상단, Rt/Lt, ...]
+  const rowTop = { right: rows[1], left: rows[2] };
   const tin = {};
   for (const side of ["right", "left"]) {
-    const pitch = parsePitch(await ocrText(worker, pageCanvas, TINNITO_CELLS[side].pitch));
-    const loud = parseLoud(await ocrText(worker, pageCanvas, TINNITO_CELLS[side].loud));
+    let pReg = TINNITO_CELLS[side].pitch, lReg = TINNITO_CELLS[side].loud; // 폴백
+    if (rows.length >= 3) {
+      const top = rowTop[side], rowH = rows[2] - rows[1];
+      const y0 = top + 0.20 * rowH, y1 = top + 0.92 * rowH; // 숫자 잉크가 들어오는 범위
+      pReg = [TIN_COLS.pitch[0], y0, TIN_COLS.pitch[1], y1];
+      lReg = [TIN_COLS.loud[0], y0, TIN_COLS.loud[1], y1];
+    }
+    const pitch = parsePitch(await ocrCellText(worker, pageCanvas, pReg));
+    const loud = parseLoud(await ocrCellText(worker, pageCanvas, lReg));
     tin[side] = { pitch, loud };
   }
   renderTinnitus(pageCanvas, tin);
   applyState(state); // 콜아웃 표시 상태 동기화
+}
+
+// 이명표의 가로 칸선을 찾아 행 세로 위치를 동적으로 파악한다.
+// 반환: 칸선 중앙의 ny 배열(위→아래). 보통 [표상단, 헤더/Rt, Rt/Lt, ...].
+function detectTinnitusRows(src) {
+  const W = src.width, H = src.height;
+  const yTop = Math.round(0.873 * H), yBot = Math.round(0.955 * H);
+  const xL = Math.round(0.05 * W), xR = Math.round(0.95 * W);
+  const w = xR - xL, h = yBot - yTop;
+  const d = src.getContext("2d").getImageData(xL, yTop, w, h).data;
+  const centers = [];
+  let start = -1;
+  for (let y = 0; y <= h; y++) {
+    let isLine = false;
+    if (y < h) {
+      let cnt = 0;
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4;
+        if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < 120) cnt++;
+      }
+      isLine = cnt > 0.7 * w;
+    }
+    if (isLine) { if (start < 0) start = y; }
+    else if (start >= 0) { centers.push((yTop + (start + y - 1) / 2) / H); start = -1; }
+  }
+  return centers;
 }
 
 // 이명 Pitch는 정해진 값 중 하나(250·500·1000·4000·8000)뿐이라는 점을 이용해
@@ -511,6 +548,56 @@ async function ocrText(worker, src, region, whitelist = "0123456789") {
   await worker.setParameters({ tessedit_char_whitelist: whitelist });
   const { data } = await worker.recognize(pre.canvas);
   return data.text || "";
+}
+
+// 이명표 셀 전용: 가로 칸선을 지우고(가로선 제거는 숫자를 해치지 않음),
+// 숫자 잉크의 실제 경계로 자동 크롭한 뒤 OCR. 행 위치가 PDF마다 달라도 견고.
+async function ocrCellText(worker, src, region, whitelist = "0123456789") {
+  const pre = preprocessCell(src, region);
+  if (pre.inkRatio < 0.002) return "";
+  await worker.setParameters({ tessedit_char_whitelist: whitelist });
+  const { data } = await worker.recognize(pre.canvas);
+  return data.text || "";
+}
+function preprocessCell(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30) {
+  const sx = nx0 * src.width, sy = ny0 * src.height;
+  const sw = (nx1 - nx0) * src.width, sh = (ny1 - ny0) * src.height;
+  const dw = Math.round(sw * zoom), dh = Math.round(sh * zoom);
+  const t = document.createElement("canvas"); t.width = dw; t.height = dh;
+  const tc = t.getContext("2d");
+  tc.imageSmoothingEnabled = true; tc.imageSmoothingQuality = "high";
+  tc.drawImage(src, sx, sy, sw, sh, 0, 0, dw, dh);
+  const im = tc.getImageData(0, 0, dw, dh); const a = im.data;
+  for (let i = 0; i < a.length; i += 4) {
+    const g = 0.299 * a[i] + 0.587 * a[i + 1] + 0.114 * a[i + 2];
+    a[i] = a[i + 1] = a[i + 2] = g;
+  }
+  // 가로 칸선(칸 폭의 80% 이상 검은 행) 제거 — 숫자는 칸 폭을 가득 채우지 않아 안전
+  for (let y = 0; y < dh; y++) {
+    let cnt = 0;
+    for (let x = 0; x < dw; x++) if (a[(y * dw + x) * 4] < 150) cnt++;
+    if (cnt >= 0.80 * dw) for (let x = 0; x < dw; x++) { const i = (y * dw + x) * 4; a[i] = a[i + 1] = a[i + 2] = 255; }
+  }
+  // 숫자 잉크의 경계 상자 찾기
+  let minX = dw, minY = dh, maxX = -1, maxY = -1;
+  for (let y = 0; y < dh; y++) for (let x = 0; x < dw; x++) {
+    if (a[(y * dw + x) * 4] < 140) {
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+    }
+  }
+  tc.putImageData(im, 0, 0);
+  if (maxX < 0) return { canvas: t, inkRatio: 0 }; // 잉크 없음(빈 칸)
+  const cw = maxX - minX + 1, ch = maxY - minY + 1;
+  const c = document.createElement("canvas");
+  c.width = cw + pad * 2; c.height = ch + pad * 2;
+  const cc = c.getContext("2d");
+  cc.fillStyle = "#fff"; cc.fillRect(0, 0, c.width, c.height);
+  cc.drawImage(t, minX, minY, cw, ch, pad, pad, cw, ch);
+  const id = cc.getImageData(0, 0, c.width, c.height).data;
+  let ink = 0;
+  for (let i = 0; i < id.length; i += 4) if (id[i] < 130) ink++;
+  return { canvas: c, inkRatio: ink / (c.width * c.height) };
 }
 async function ocrNumber(worker, src, region, opts = {}) {
   const { max = null, whitelist = "0123456789" } = opts;
