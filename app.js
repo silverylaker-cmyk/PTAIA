@@ -278,7 +278,11 @@ async function renderOcr(pageCanvas) {
       lReg = [TIN_COLS.loud[0], y0, TIN_COLS.loud[1], y1];
     }
     const pitch = parsePitch(await ocrCellText(worker, pageCanvas, pReg));
-    const loud = parseLoud(await ocrCellText(worker, pageCanvas, lReg));
+    let loud = parseLoud(await ocrCellText(worker, pageCanvas, lReg));
+    if (loud == null) {
+      // autocrop이 칸선과 숫자를 붙여 판독 실패하는 PDF 대비: 셀 전체를 다시 읽는다
+      loud = parseLoud(await ocrCellText(worker, pageCanvas, lReg, "0123456789", false));
+    }
     tin[side] = { pitch, loud };
   }
   renderTinnitus(pageCanvas, tin);
@@ -551,14 +555,14 @@ async function ocrText(worker, src, region, whitelist = "0123456789") {
 
 // 이명표 셀 전용: 가로 칸선을 지우고(가로선 제거는 숫자를 해치지 않음),
 // 숫자 잉크의 실제 경계로 자동 크롭한 뒤 OCR. 행 위치가 PDF마다 달라도 견고.
-async function ocrCellText(worker, src, region, whitelist = "0123456789") {
-  const pre = preprocessCell(src, region);
+async function ocrCellText(worker, src, region, whitelist = "0123456789", autocrop = true) {
+  const pre = preprocessCell(src, region, 4, 30, autocrop);
   if (pre.inkRatio < 0.002) return "";
   await worker.setParameters({ tessedit_char_whitelist: whitelist });
   const { data } = await worker.recognize(pre.canvas);
   return data.text || "";
 }
-function preprocessCell(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30) {
+function preprocessCell(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30, autocrop = true) {
   const sx = nx0 * src.width, sy = ny0 * src.height;
   const sw = (nx1 - nx0) * src.width, sh = (ny1 - ny0) * src.height;
   const dw = Math.round(sw * zoom), dh = Math.round(sh * zoom);
@@ -576,6 +580,20 @@ function preprocessCell(src, [nx0, ny0, nx1, ny1], zoom = 4, pad = 30) {
     let cnt = 0;
     for (let x = 0; x < dw; x++) if (a[(y * dw + x) * 4] < 150) cnt++;
     if (cnt >= 0.80 * dw) for (let x = 0; x < dw; x++) { const i = (y * dw + x) * 4; a[i] = a[i + 1] = a[i + 2] = 255; }
+  }
+  // autocrop 없이 셀 전체를 그대로 사용(autocrop이 칸선과 숫자를 바짝 붙여
+  // 판독에 실패하는 PDF 대비 fallback). line-removed 캔버스를 pad만 둘러 반환.
+  if (!autocrop) {
+    tc.putImageData(im, 0, 0);
+    const c = document.createElement("canvas");
+    c.width = dw + pad * 2; c.height = dh + pad * 2;
+    const cc = c.getContext("2d");
+    cc.fillStyle = "#fff"; cc.fillRect(0, 0, c.width, c.height);
+    cc.drawImage(t, 0, 0, dw, dh, pad, pad, dw, dh);
+    const id = cc.getImageData(0, 0, c.width, c.height).data;
+    let ink = 0;
+    for (let i = 0; i < id.length; i += 4) if (id[i] < 130) ink++;
+    return { canvas: c, inkRatio: ink / (c.width * c.height) };
   }
   // 숫자 잉크의 경계 상자 찾기
   let minX = dw, minY = dh, maxX = -1, maxY = -1;
