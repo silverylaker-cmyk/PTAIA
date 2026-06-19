@@ -295,21 +295,27 @@ function parsePitch(text) {
 }
 
 // 이명 Loudness는 20~99(두 자리)뿐이라는 점을 이용해 재평가한다.
-// 앞에 경계선 "1"이 붙거나(175→75) 끝에 0이 붙는(750→75) 오류를 보정.
+//  1) 20~99면 그대로
+//  2) 끝자리 0 덧붙음 보정 (750→75)
+//  3) 100 이상(앞에 경계선 "1" 등 한 자리가 덧붙은 경우): 맨 앞자리를 떼어
+//     20~99면 그 값(175→75). 떼었더니 20 미만이면 null이 아니라 보정 전
+//     원래 값을 그대로 출력(118→118)해서, 사람이 눈으로 확인하게 둔다.
 function parseLoud(text) {
   const s = (text || "").replace(/\D/g, "");
   if (!s) return null;
   const n = parseInt(s, 10);
-  if (Number.isFinite(n) && n >= 20 && n <= 99) return n;
-  let t = s;                                                             // 끝자리 0 덧붙음 보정
+  if (!Number.isFinite(n)) return null;
+  if (n >= 20 && n <= 99) return n;                                      // 1)
+  let t = s;                                                             // 2) 끝자리 0 보정
   while (t.length > 2 && t.endsWith("0")) {
     t = t.slice(0, -1);
     const v = parseInt(t, 10);
     if (v >= 20 && v <= 99) return v;
   }
-  if (s.length >= 2) {                                                   // 앞자리 덧붙음 → 뒤 두 자리
-    const last2 = parseInt(s.slice(-2), 10);
-    if (last2 >= 20 && last2 <= 99) return last2;
+  if (n >= 100 && s.length >= 3) {                                       // 3) 맨 앞자리 제거
+    const stripped = parseInt(s.slice(1), 10);
+    if (stripped >= 20 && stripped <= 99) return stripped;              //    175→75
+    return n;                                                           //    118→118(원래 값)
   }
   return null;
 }
