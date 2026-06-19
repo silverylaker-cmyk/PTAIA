@@ -49,7 +49,7 @@ const TINNITO_CELLS = {
 };
 
 // 이명 Pitch가 가질 수 있는 값(이 병원 양식) — OCR 결과 재평가에 사용
-const TINNITUS_PITCHES = [250, 500, 1000, 4000, 8000];
+const TINNITUS_PITCHES = [250, 500, 1000, 2000, 3000, 4000, 6000, 8000];
 
 const RENDER_SCALE = 3.2;
 
@@ -311,7 +311,7 @@ function detectTinnitusRows(src) {
   return centers;
 }
 
-// 이명 Pitch는 정해진 값 중 하나(250·500·1000·4000·8000)뿐이라는 점을 이용해
+// 이명 Pitch는 정해진 값 중 하나(250·500·1000·2000·3000·4000·6000·8000)뿐이라는 점을 이용해
 // OCR 결과를 재평가한다. 경계선이 앞에 "1"로 붙는 오류가 있으므로 "뒤에서부터"
 // 유효값과 맞춰 본다(예: 18000→8000, 1500→500). 그래도 없으면 가장 가까운 값.
 function parsePitch(text) {
