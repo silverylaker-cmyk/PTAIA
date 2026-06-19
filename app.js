@@ -278,10 +278,12 @@ async function renderOcr(pageCanvas) {
       lReg = [TIN_COLS.loud[0], y0, TIN_COLS.loud[1], y1];
     }
     const pitch = parsePitch(await ocrCellText(worker, pageCanvas, pReg));
-    let loud = parseLoud(await ocrCellText(worker, pageCanvas, lReg));
+    // loudness는 셀 전체(full-cell)를 우선 판독한다: autocrop의 tight crop은
+    // 기울어진 "7"의 여백 맥락을 없애 "1"로 오인(75→15, 70→10)하므로,
+    // 여백이 남는 full-cell이 더 안정적이다. autocrop은 폴백으로만 쓴다.
+    let loud = parseLoud(await ocrCellText(worker, pageCanvas, lReg, "0123456789", false));
     if (loud == null) {
-      // autocrop이 칸선과 숫자를 붙여 판독 실패하는 PDF 대비: 셀 전체를 다시 읽는다
-      loud = parseLoud(await ocrCellText(worker, pageCanvas, lReg, "0123456789", false));
+      loud = parseLoud(await ocrCellText(worker, pageCanvas, lReg)); // autocrop 폴백
     }
     tin[side] = { pitch, loud };
   }
