@@ -13,9 +13,9 @@
     <div id="dropZone" class="dropzone">
       <div class="dz-icon">📄</div>
       <p class="dz-title">여기에 검사 결과 PDF를 끌어다 놓으세요</p>
-      <p class="dz-sub">순음청력검사 · 임피던스청력검사 결과지</p>
+      <p class="dz-sub">순음청력검사 · 임피던스청력검사 결과지 <b>(2개를 넣으면 시간순 비교)</b></p>
       <button id="pickBtn" class="dz-btn" type="button">또는 파일 선택</button>
-      <input id="fileInput" type="file" accept="application/pdf" hidden />
+      <input id="fileInput" type="file" accept="application/pdf" multiple hidden />
     </div>
     <p id="dropError" class="drop-error" hidden></p>
   </section>
@@ -93,6 +93,9 @@
 
       <!-- 이명 (레이아웃은 JS가 한쪽/양측에 맞춰 구성) -->
       <section class="page" data-page="tinnitus" id="tinnitusPage"></section>
+
+      <!-- 순음청력 시간순 비교 (2개 파일 드롭 시. 레이아웃은 JS가 구성) -->
+      <section class="page" data-page="compare" id="comparePage" hidden></section>
     </div>
 
     <div class="hint" id="hint">화면을 클릭하면 다음 단계로 넘어갑니다</div>

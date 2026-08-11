@@ -70,7 +70,7 @@ let lastPageCanvas = null;
 /* =========================================================
    슬라이드 상태 머신
 ========================================================= */
-const STATES = [
+const STATES_SINGLE = [
   { page: "audio", sub: "0" },
   { page: "audio", sub: "1" }, // 정상영역 빨간 테두리
   { page: "audio", sub: "2" }, // dB 구간 배경색
@@ -80,17 +80,29 @@ const STATES = [
   { page: "tinnitus", callout: true },
   { page: "tinnitus", callout: false }, // 콜아웃만 숨김(동그라미 유지)
 ];
+// 비교 모드(파일 2개): 순음청력만 다루므로 speech banana 단계는 제외한다.
+// 4개로 축소된 차트에 그림·음소 라벨까지 얹으면 읽기 어렵고 비교 목적과도 무관.
+const STATES_COMPARE = [
+  { page: "compare", sub: "0" }, // 그래프만
+  { page: "compare", sub: "1" }, // 정상영역 빨간 테두리
+  { page: "compare", sub: "2" }, // dB 구간 배경색
+];
+let STATES = STATES_SINGLE;
 let state = 0;
 
 function applyState(i) {
   state = Math.max(0, Math.min(STATES.length - 1, i));
   const s = STATES[state];
   deck.querySelectorAll(".page").forEach((p) => { p.hidden = p.dataset.page !== s.page; });
-  const audioPage = deck.querySelector('[data-page="audio"]');
+  // 오버레이 표시는 [data-sub="N"] 전역 CSS 규칙이 담당하므로,
+  // 활성 페이지에 sub만 세팅하면 audio·compare 양쪽에서 그대로 동작한다.
+  const active = deck.querySelector(`[data-page="${s.page}"]`);
+  if (active && s.sub != null) active.dataset.sub = s.sub;
   if (s.page === "audio") {
-    audioPage.dataset.sub = s.sub;
     $("audioFab").hidden = s.sub !== "3";
     requestAnimationFrame(positionSpeechZoneLabel);
+  } else {
+    $("audioFab").hidden = true;
   }
   if (s.page === "tinnitus") {
     deck.querySelectorAll(".tin-callout").forEach((c) => { c.hidden = !s.callout; });
@@ -135,12 +147,12 @@ backBtn.addEventListener("click", (e) => { e.stopPropagation(); goBack(); });
 
 /* ---------- 드래그앤드롭 ---------- */
 $("pickBtn").addEventListener("click", () => fileInput.click());
-fileInput.addEventListener("change", (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+fileInput.addEventListener("change", (e) => handleFiles(e.target.files));
 ["dragenter", "dragover"].forEach((ev) =>
   dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.add("drag"); }));
 ["dragleave", "drop"].forEach((ev) =>
   dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.remove("drag"); }));
-dropZone.addEventListener("drop", (e) => { const f = e.dataTransfer.files[0]; if (f) handleFile(f); });
+dropZone.addEventListener("drop", (e) => handleFiles(e.dataTransfer.files));
 dropZone.addEventListener("click", () => fileInput.click());
 
 /* ---------- 소리 듣기 ---------- */
@@ -168,25 +180,41 @@ async function getWorker() {
 }
 
 /* ---------- 메인 처리 ---------- */
+const isPdf = (f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
+
+// PDF 1페이지를 캔버스로 렌더링해서 돌려준다(단일·비교 모드 공용).
+async function renderPdfToCanvas(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const page = await pdf.getPage(1);
+  const viewport = page.getViewport({ scale: RENDER_SCALE });
+  const pageCanvas = document.createElement("canvas");
+  pageCanvas.width = viewport.width;
+  pageCanvas.height = viewport.height;
+  await page.render({ canvasContext: pageCanvas.getContext("2d"), viewport }).promise;
+  return pageCanvas;
+}
+
+// 드롭/선택된 파일 개수에 따라 단일 모드와 비교 모드로 갈라진다.
+function handleFiles(fileList) {
+  dropError.hidden = true;
+  const files = [...fileList].filter(isPdf);
+  if (files.length === 0) return showError("PDF 파일만 올릴 수 있어요.");
+  if (files.length === 1) return handleFile(files[0]);
+  if (files.length > 2) return showError("비교는 PDF 2개까지 가능해요.");
+  return handleCompare(files);
+}
+
 async function handleFile(file) {
   dropError.hidden = true;
-  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-    showError("PDF 파일만 올릴 수 있어요."); return;
-  }
   dropScreen.hidden = true;
   loading.hidden = false;
   try {
-    const buf = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-    const page = await pdf.getPage(1);
-    const viewport = page.getViewport({ scale: RENDER_SCALE });
-    const pageCanvas = document.createElement("canvas");
-    pageCanvas.width = viewport.width;
-    pageCanvas.height = viewport.height;
-    await page.render({ canvasContext: pageCanvas.getContext("2d"), viewport }).promise;
+    const pageCanvas = await renderPdfToCanvas(file);
     lastPageCanvas = pageCanvas;
 
     renderStatic(pageCanvas);
+    STATES = STATES_SINGLE;
     loading.hidden = true;
     resultScreen.hidden = false;
     applyState(0);
@@ -194,10 +222,37 @@ async function handleFile(file) {
     await renderOcr(pageCanvas);
   } catch (err) {
     console.error(err);
-    loading.hidden = true;
-    dropScreen.hidden = false;
-    showError("결과지를 읽지 못했어요. 우리 병원 검사 결과지 PDF가 맞는지 확인해 주세요.");
+    failToDropScreen();
   }
+}
+
+// 비교 모드: 파일 수정일시(lastModified) 순으로 정렬해 과거 → 최근으로 나란히 놓는다.
+async function handleCompare(files) {
+  dropScreen.hidden = true;
+  loading.hidden = false;
+  try {
+    const sorted = [...files].sort((a, b) => a.lastModified - b.lastModified);
+    const canvases = [];
+    for (const f of sorted) canvases.push(await renderPdfToCanvas(f));
+    lastPageCanvas = canvases[canvases.length - 1];
+
+    buildComparePage(sorted, canvases);
+    STATES = STATES_COMPARE;
+    loading.hidden = true;
+    resultScreen.hidden = false;
+    applyState(0);
+
+    await renderComparePta(canvases);
+  } catch (err) {
+    console.error(err);
+    failToDropScreen();
+  }
+}
+
+function failToDropScreen() {
+  loading.hidden = true;
+  dropScreen.hidden = false;
+  showError("결과지를 읽지 못했어요. 우리 병원 검사 결과지 PDF가 맞는지 확인해 주세요.");
 }
 function showError(msg) { dropError.textContent = msg; dropError.hidden = false; }
 
@@ -254,6 +309,101 @@ function renderStatic(pageCanvas) {
   // 언어청력 캡쳐
   $("speechCapture").querySelectorAll("canvas").forEach((n) => n.remove());
   $("speechCapture").prepend(crop(pageCanvas, REGION.speech));
+}
+
+/* ---------- 시간순 비교(파일 2개) ---------- */
+// 비교 셀 참조: OCR이 끝난 뒤 평균 dB·변화량을 채워 넣기 위해 보관한다.
+let cmpCells = [];
+
+const EAR_KO = { right: "오른쪽", left: "왼쪽" };
+
+function fmtDateTime(ms) {
+  const d = new Date(ms);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// 2×2 그리드: 가로=시간(과거→최근), 세로=귀(위 오른쪽/아래 왼쪽)
+function buildComparePage(files, canvases) {
+  const page = $("comparePage");
+  page.innerHTML = "";
+  cmpCells = [];
+
+  const grid = document.createElement("div");
+  grid.className = "cmp-grid";
+
+  // 열 = 검사 시점(과거 → 최근), 열 안의 행 = 귀(위 오른쪽 / 아래 왼쪽).
+  // 열을 래퍼로 감싸두면 좁은 화면에서 1열로 접힐 때 머리말이 제 검사에 붙어 따라간다.
+  const cols = files.map((f, i) => {
+    const col = document.createElement("div");
+    col.className = "cmp-col";
+    const h = document.createElement("div");
+    h.className = "cmp-colhead";
+    h.innerHTML = `${i === 0 ? "이전 검사" : "최근 검사"}<small>${fmtDateTime(f.lastModified)}</small>`;
+    col.appendChild(h);
+    grid.appendChild(col);
+    return col;
+  });
+
+  for (const ear of ["right", "left"]) {
+    canvases.forEach((canvas, i) => {
+      const panel = document.createElement("article");
+      panel.className = "panel";
+      panel.dataset.ear = ear;
+
+      const banner = document.createElement("div");
+      banner.className = `panel-banner banner-${ear}`;
+      const sig = document.createElement("span");
+      sig.className = "signal";
+      const pta = document.createElement("span");
+      pta.className = "pta-val";
+      const box = document.createElement("span");
+      box.className = "pta-box";
+      box.append(sig, pta);
+      banner.innerHTML =
+        `<span class="ear-label">${EAR_KO[ear]}</span>` +
+        `<span class="ear-en">${ear.toUpperCase()}</span>`;
+      banner.appendChild(box);
+
+      const wrap = document.createElement("div");
+      wrap.className = "chart-wrap";
+      setChart(wrap, crop(canvas, AUDIO_DISPLAY[ear]));
+      buildAudioOverlay(ear, wrap, { extras: false });
+
+      panel.append(banner, wrap);
+      cols[i].appendChild(panel);
+      cmpCells.push({ ear, idx: i, sig, pta, banner });
+    });
+  }
+  page.appendChild(grid);
+}
+
+// 평균 dB를 4칸 모두 OCR한 뒤, 최근 검사 쪽에 변화량 칩을 붙인다.
+async function renderComparePta(canvases) {
+  const worker = await getWorker();
+  const ptaOpts = { max: 120, whitelist: "0123456789d. " };
+  const db = {}; // `${ear}${idx}` → 평균 dB
+
+  for (const cell of cmpCells) {
+    const v = await ocrNumber(worker, canvases[cell.idx], PTA_OCR[cell.ear], ptaOpts);
+    db[`${cell.ear}${cell.idx}`] = v;
+    if (v == null) { cell.sig.style.background = "#bbb"; continue; }
+    cell.pta.textContent = `${v} dB`;
+    cell.sig.style.background = signalColor(v);
+  }
+
+  // 변화량: 평균 dB 증가 = 청력 악화(▲ 빨강), 감소 = 호전(▼ 초록)
+  for (const cell of cmpCells) {
+    if (cell.idx === 0) continue;
+    const before = db[`${cell.ear}0`], after = db[`${cell.ear}${cell.idx}`];
+    if (before == null || after == null) continue;
+    const d = after - before;
+    const chip = document.createElement("span");
+    chip.className = "cmp-delta";
+    chip.textContent = d === 0 ? "변화 없음" : `${d > 0 ? "▲" : "▼"}${Math.abs(d)}`;
+    chip.style.background = d === 0 ? "rgba(255,255,255,.22)" : d > 0 ? "#c0121b" : "#127a33";
+    cell.banner.appendChild(chip);
+  }
 }
 
 /* ---------- OCR 이후 ---------- */
@@ -394,8 +544,10 @@ function geom(ear) {
   return { xf, yf, xL, xR };
 }
 
-/* 오버레이(빨간테두리 / dB구간색 / speech banana + 그림) 구성 */
-function buildAudioOverlay(ear, wrap) {
+/* 오버레이(빨간테두리 / dB구간색 / speech banana + 그림) 구성
+   extras=false: 저음/고음 라벨·음소·소리 그림을 생략한다(비교 모드용).
+   4개로 줄어든 차트에 4번씩 반복되면 가독성만 해치고, sub 3 단계도 쓰지 않는다. */
+function buildAudioOverlay(ear, wrap, { extras = true } = {}) {
   const g = geom(ear);
   const X = (v) => (v * 100).toFixed(2);
   const SVGNS = "http://www.w3.org/2000/svg";
@@ -448,6 +600,7 @@ function buildAudioOverlay(ear, wrap) {
   svg.appendChild(gBanana);
 
   wrap.appendChild(svg);
+  if (!extras) return;
 
   // 저음/고음 방향 라벨 (빨간 테두리 슬라이드, 110dB 선에 배치)
   const freqLabel = document.createElement("div");
