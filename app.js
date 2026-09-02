@@ -357,6 +357,9 @@ function buildComparePage(files, canvases) {
       sig.className = "signal";
       const pta = document.createElement("span");
       pta.className = "pta-val";
+      // 단일 모드(renderStatic)와 동일하게 숫자 이미지를 먼저 넣어둔다.
+      // OCR이 실패해도 dB 값이 눈에는 보이게 하는 폴백.
+      pta.appendChild(cropMagnify(canvas, PTA_OCR[ear]));
       const box = document.createElement("span");
       box.className = "pta-box";
       box.append(sig, pta);
@@ -387,6 +390,7 @@ async function renderComparePta(canvases) {
   for (const cell of cmpCells) {
     const v = await ocrNumber(worker, canvases[cell.idx], PTA_OCR[cell.ear], ptaOpts);
     db[`${cell.ear}${cell.idx}`] = v;
+    // 실패하면 미리 넣어둔 숫자 이미지를 그대로 둔다(applyPta와 같은 규칙)
     if (v == null) { cell.sig.style.background = "#bbb"; continue; }
     cell.pta.textContent = `${v} dB`;
     cell.sig.style.background = signalColor(v);

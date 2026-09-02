@@ -101,17 +101,22 @@ body{
 /* 순음청력 시간순 비교 (파일 2개, 2×2) */
 /* 열 폭을 내용에 맞추고 가운데로 모아, 두 검사가 서로 가깝게 붙어 비교되게 한다 */
 .cmp-grid{display:grid;grid-template-columns:auto auto;justify-content:center;gap:34px;width:100%;align-items:start}
-.cmp-col{display:flex;flex-direction:column;gap:10px;align-items:center;min-width:0}
-.cmp-colhead{text-align:center;font-weight:900;font-size:clamp(19px,2vw,27px);line-height:1.25}
+.cmp-col{display:flex;flex-direction:column;gap:8px;align-items:center;min-width:0}
+.cmp-colhead{text-align:center;font-weight:900;font-size:clamp(17px,1.5vw,23px);line-height:1.25}
 .cmp-colhead small{display:block;font-size:.55em;font-weight:600;color:var(--muted);margin-top:3px}
-/* 4개가 한 화면에 들어가도록 셀 크기 축소(.panel 기본 폭 규칙을 덮어씀) */
-.cmp-grid .panel{width:calc((100vh - 250px) * 0.47)}
+/* 4개가 한 화면에 들어가도록 셀 크기 축소(.panel 기본 폭 규칙을 덮어씀).
+   차트 비율 h/w=1.072(AUDIO_DISPLAY 기준)이고 2단이므로 필요 높이는 2.144w + 고정
+   오버헤드(페이지 패딩·열머리말·간격·배너 2개 ≈214px). 거기서 역산한 폭이다. */
+.cmp-grid .panel{width:calc((100vh - 214px) / 2.15)}
+.page[data-page="compare"]{padding-bottom:44px}
 /* 배너가 줄바꿈되면 두 열의 행 높이가 어긋난다 — 한 줄로 고정한다 */
 .cmp-grid .panel-banner{padding:7px 13px;gap:8px;flex-wrap:nowrap}
 .cmp-grid .ear-label{font-size:clamp(16px,1.5vw,21px);white-space:nowrap}
 .cmp-grid .ear-en{display:none}          /* 한글 라벨만으로 충분 — 배너 폭 확보 */
 .cmp-grid .pta-box{gap:9px}
 .cmp-grid .pta-val{font-size:clamp(17px,1.8vw,25px);white-space:nowrap}
+/* OCR 실패 시 남는 숫자 이미지 — 축소된 비교 배너에 맞춘다 */
+.cmp-grid .pta-val canvas{height:clamp(16px,1.6vw,23px);padding:1px 6px}
 .cmp-grid .signal{width:clamp(14px,1.4vw,19px);height:clamp(14px,1.4vw,19px);border-width:2px}
 .cmp-delta{margin-left:8px;font-size:clamp(12px,1.2vw,16px);font-weight:900;color:#fff;padding:3px 9px;border-radius:20px;white-space:nowrap;flex:0 0 auto}
 @media(max-width:820px){
