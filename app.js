@@ -448,8 +448,10 @@ async function renderOcr(pageCanvas) {
     }
     tin[side] = { pitch, loud };
   }
-  const tinShown = renderTinnitus(pageCanvas, tin);
-  if (tinShown) STATES = [...STATES_SINGLE, ...STATES_TIN_INFO];
+  renderTinnitus(pageCanvas, tin);
+  // 이명표에서 Pitch·Loudness 중 하나라도 읽혔으면(=이명검사를 시행) 안내 그림 2장을 이어 붙인다
+  const tinDone = ["right", "left"].some((s) => tin[s].pitch != null || tin[s].loud != null);
+  if (tinDone) STATES = [...STATES_SINGLE, ...STATES_TIN_INFO];
   applyState(state); // 콜아웃 표시 상태 동기화
 }
 
@@ -893,7 +895,6 @@ function renderTinnitus(pageCanvas, tin) {
     grid.appendChild(tableCapture());
     pageEl.appendChild(grid);
   }
-  return sides.length > 0; // 이명 결과(청력도 표시)가 있었는지
 }
 
 function buildTinnitusAudiogram(pageCanvas, side, pitch, loud) {
