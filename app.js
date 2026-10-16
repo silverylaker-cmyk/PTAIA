@@ -80,6 +80,11 @@ const STATES_SINGLE = [
   { page: "tinnitus", callout: true },
   { page: "tinnitus", callout: false }, // 콜아웃만 숨김(동그라미 유지)
 ];
+// 이명검사 결과가 표시될 때만 이명 슬라이드 뒤에 이어 붙이는 안내 이미지 슬라이드
+const STATES_TIN_INFO = [
+  { page: "tinInfo1" },
+  { page: "tinInfo2" },
+];
 // 비교 모드(파일 2개): 순음청력만 다루므로 speech banana 단계는 제외한다.
 // 4개로 축소된 차트에 그림·음소 라벨까지 얹으면 읽기 어렵고 비교 목적과도 무관.
 const STATES_COMPARE = [
@@ -108,6 +113,8 @@ function applyState(i) {
     deck.querySelectorAll(".tin-callout").forEach((c) => { c.hidden = !s.callout; });
   }
   backBtn.hidden = state === 0;
+  // 전체 화면 이미지 위에는 하단 안내 띠를 숨겨 이미지 아래쪽 글자를 가리지 않게 한다
+  $("hint").hidden = s.page.startsWith("tinInfo");
   $("hint").textContent =
     state === STATES.length - 1 ? "마지막 화면입니다" : "화면을 클릭하면 다음 단계로 넘어갑니다";
   window.scrollTo(0, 0);
@@ -214,7 +221,7 @@ async function handleFile(file) {
     lastPageCanvas = pageCanvas;
 
     renderStatic(pageCanvas);
-    STATES = STATES_SINGLE;
+    STATES = [...STATES_SINGLE];
     loading.hidden = true;
     resultScreen.hidden = false;
     applyState(0);
@@ -441,7 +448,8 @@ async function renderOcr(pageCanvas) {
     }
     tin[side] = { pitch, loud };
   }
-  renderTinnitus(pageCanvas, tin);
+  const tinShown = renderTinnitus(pageCanvas, tin);
+  if (tinShown) STATES = [...STATES_SINGLE, ...STATES_TIN_INFO];
   applyState(state); // 콜아웃 표시 상태 동기화
 }
 
@@ -885,6 +893,7 @@ function renderTinnitus(pageCanvas, tin) {
     grid.appendChild(tableCapture());
     pageEl.appendChild(grid);
   }
+  return sides.length > 0; // 이명 결과(청력도 표시)가 있었는지
 }
 
 function buildTinnitusAudiogram(pageCanvas, side, pitch, loud) {

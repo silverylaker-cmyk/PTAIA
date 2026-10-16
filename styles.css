@@ -109,6 +109,9 @@ body{
    오버헤드(페이지 패딩·열머리말·간격·배너 2개 ≈214px). 거기서 역산한 폭이다. */
 .cmp-grid .panel{width:calc((100vh - 214px) / 2.15)}
 .page[data-page="compare"]{padding-bottom:44px}
+/* 전체 화면 이미지 슬라이드: 비율을 유지한 채 화면을 꽉 채움(가장자리는 이미지 배경색과 동일) */
+.page-fullimg{padding:0;gap:0;height:100vh;height:100dvh;min-height:0;align-items:center;justify-content:center;background:#fcfbf8;overflow:hidden}
+.page-fullimg img{display:block;width:100%;height:100%;object-fit:contain}
 /* 배너가 줄바꿈되면 두 열의 행 높이가 어긋난다 — 한 줄로 고정한다 */
 .cmp-grid .panel-banner{padding:7px 13px;gap:8px;flex-wrap:nowrap}
 .cmp-grid .ear-label{font-size:clamp(16px,1.5vw,21px);white-space:nowrap}
